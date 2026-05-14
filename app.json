@@ -6,23 +6,54 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0a0a0f",
+    "updates": {
+      "url": "https://u.expo.dev/c93d34f9-e72f-47e4-bef2-a4bc6467b5a9"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.slandhope.clarity",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "NSHealthShareUsageDescription": "Clarity uses Apple Health to auto-track your habits like sleep, steps and exercise.",
+        "NSHealthUpdateUsageDescription": "Clarity uses Apple Health to auto-track your habits.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.979514312077-9pfv6i8rb2nj63qtfanq155qde3mfisc"
+            ]
+          }
+        ]
       }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0f"
-      }
+      },
+      "package": "com.slandhope.clarity"
     },
     "extra": {
       "eas": {
         "projectId": "c93d34f9-e72f-47e4-bef2-a4bc6467b5a9"
       }
     },
-    "owner": "slandhope"
+    "owner": "slandhope",
+    "plugins": [
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Clarity uses Apple Health to auto-track your habits like sleep, steps and exercise.",
+          "NSHealthUpdateUsageDescription": "Clarity uses Apple Health to auto-track your habits."
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.979514312077-9pfv6i8rb2nj63qtfanq155qde3mfisc"
+        }
+      ]
+    ]
   }
 }

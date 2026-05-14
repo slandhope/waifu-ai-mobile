@@ -33,7 +33,7 @@ const AUTO_HABITS = [
 export default function FitnessScreen({ data }) {
   const { colors, accent } = useTheme()
   const navigation = useNavigation()
-  const { connected, steps, sleepHours, activeMinutes, isExpoGo, connectFitness } = useFitnessData(
+  const { connected, steps, sleepHours, activeMinutes, connectFitness, fetchData } = useFitnessData(
     data?.toggleHabit,
     data?.todayHabits || []
   )
@@ -59,10 +59,13 @@ export default function FitnessScreen({ data }) {
           <View style={[styles.statusCard, { backgroundColor: 'rgba(52,211,153,0.1)', borderColor: 'rgba(52,211,153,0.3)' }]}>
             <Text style={styles.statusIcon}>✅</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.statusTitle, { color: '#34d399' }]}>Connected!</Text>
+              <Text style={[styles.statusTitle, { color: '#34d399' }]}>Connected to Apple Health!</Text>
               <Text style={[styles.statusSub, { color: colors.textMuted }]}>
-                {steps} steps · {sleepHours}hrs sleep · {activeMinutes}min active
+                {steps > 0 ? `${steps.toLocaleString()} steps` : 'Loading steps...'} · {sleepHours > 0 ? `${sleepHours}hrs sleep` : 'No sleep data'} · {activeMinutes > 0 ? `${activeMinutes}min active` : 'No workout data'}
               </Text>
+              <TouchableOpacity onPress={fetchData} style={styles.refreshBtn}>
+                <Text style={styles.refreshText}>↻ Refresh data</Text>
+              </TouchableOpacity>
             </View>
           </View>
         ) : (
@@ -79,7 +82,7 @@ export default function FitnessScreen({ data }) {
 
         {/* sources */}
         <Text style={[styles.sectionLabel, { color: colors.textFaint }]}>
-          {Platform.OS === 'ios' ? 'IOS' : 'ANDROID'}
+          {Platform.OS === 'ios' ? 'IOS SOURCES' : 'ANDROID SOURCES'}
         </Text>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {sources.map((s, i) => (
@@ -101,7 +104,7 @@ export default function FitnessScreen({ data }) {
               </View>
               <View style={[styles.connectBadge, { backgroundColor: connected ? 'rgba(52,211,153,0.15)' : accent.glow }]}>
                 <Text style={[styles.connectText, { color: connected ? '#34d399' : accent.primary }]}>
-                  {connected ? 'Connected' : 'Connect'}
+                  {connected ? '✓ Connected' : 'Connect'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -125,27 +128,14 @@ export default function FitnessScreen({ data }) {
           ))}
         </View>
 
-        {/* coming soon */}
-        {isExpoGo && (
-          <View style={[styles.comingSoon, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={styles.comingSoonIcon}>🔧</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.comingSoonTitle, { color: colors.text }]}>Coming in full release</Text>
-              <Text style={[styles.comingSoonSub, { color: colors.textFaint }]}>
-                Fitness integration will be fully active when Clarity launches on the App Store.
-              </Text>
-            </View>
-          </View>
-        )}
-
         {/* cta */}
-        <TouchableOpacity onPress={connectFitness} style={styles.ctaBtn} activeOpacity={0.8}>
-          <LinearGradient colors={accent.gradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.ctaInner}>
-            <Text style={styles.ctaText}>
-              {connected ? '✓ Connected' : `Connect ${primarySource} →`}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
+        {!connected && (
+          <TouchableOpacity onPress={connectFitness} style={styles.ctaBtn} activeOpacity={0.8}>
+            <LinearGradient colors={accent.gradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.ctaInner}>
+              <Text style={styles.ctaText}>Connect {primarySource} →</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -159,10 +149,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, marginBottom: 20 },
   backBtn: { fontSize: 15, fontWeight: '500' },
   pageTitle: { fontSize: 17, fontWeight: '600' },
-  statusCard: { flexDirection: 'row', gap: 12, borderRadius: 16, padding: 14, marginBottom: 24, borderWidth: 1, alignItems: 'center' },
+  statusCard: { flexDirection: 'row', gap: 12, borderRadius: 16, padding: 14, marginBottom: 24, borderWidth: 1, alignItems: 'flex-start' },
   statusIcon: { fontSize: 24 },
-  statusTitle: { fontSize: 14, fontWeight: '600' },
-  statusSub: { fontSize: 11, marginTop: 2 },
+  statusTitle: { fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  statusSub: { fontSize: 11, lineHeight: 18 },
+  refreshBtn: { marginTop: 8 },
+  refreshText: { color: '#34d399', fontSize: 12 },
   infoBanner: { flexDirection: 'row', gap: 12, borderRadius: 16, padding: 14, marginBottom: 24, borderWidth: 1 },
   infoIcon: { fontSize: 20 },
   infoTitle: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
@@ -183,10 +175,6 @@ const styles = StyleSheet.create({
   autoHabit: { fontSize: 13 },
   autoThreshold: { fontSize: 10, marginTop: 2 },
   autoSource: { fontSize: 11 },
-  comingSoon: { flexDirection: 'row', gap: 12, borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1 },
-  comingSoonIcon: { fontSize: 20 },
-  comingSoonTitle: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
-  comingSoonSub: { fontSize: 11, lineHeight: 16 },
   ctaBtn: { borderRadius: 14, overflow: 'hidden' },
   ctaInner: { paddingVertical: 16, alignItems: 'center' },
   ctaText: { color: '#fff', fontWeight: '600', fontSize: 15 },

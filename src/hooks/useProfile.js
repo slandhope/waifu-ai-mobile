@@ -3,20 +3,35 @@ import * as ImagePicker from 'expo-image-picker'
 import { useEffect, useState } from 'react'
 
 export function useProfile() {
-  const [avatar, setAvatar] = useState(null) // custom photo uri
-  const [animalAvatar, setAnimalAvatar] = useState('🦊') // animal emoji
-  const [avatarType, setAvatarType] = useState('animal') // 'animal' | 'custom'
+  const [avatar, setAvatar] = useState(null)
+  const [animalAvatar, setAnimalAvatar] = useState('🦊')
+  const [avatarType, setAvatarType] = useState('animal')
   const [name, setName] = useState('')
+  const [googlePhoto, setGooglePhoto] = useState(null)
+  const [applePhoto, setApplePhoto] = useState(null)
 
   useEffect(() => {
-   AsyncStorage.getItem('avatar-uri').then(val => { if(val) setAvatar(val) })
-AsyncStorage.getItem('avatar-type').then(val => { if(val) setAvatarType(val) })
-AsyncStorage.getItem('animal-avatar').then(val => { if(val) setAnimalAvatar(val) })
-AsyncStorage.getItem('user-name').then(val => { if(val) setName(val) })
+    loadProfile()
   }, [])
 
-  const pickCustomPhoto = async () => {
-    // ask permission
+  const loadProfile = async () => {
+    AsyncStorage.getItem('avatar-uri').then(val => { if(val) setAvatar(val) })
+    AsyncStorage.getItem('avatar-type').then(val => { if(val) setAvatarType(val) })
+    AsyncStorage.getItem('animal-avatar').then(val => { if(val) setAnimalAvatar(val) })
+    AsyncStorage.getItem('user-name').then(val => { if(val) setName(val) })
+    AsyncStorage.getItem('google-photo').then(val => { if(val) setGooglePhoto(val) })
+    AsyncStorage.getItem('apple-photo').then(val => { if(val) setApplePhoto(val) })
+  }
+
+  const pickCustomPhoto = async (uri) => {
+    if(uri) {
+      setAvatar(uri)
+      setAvatarType('custom')
+      await AsyncStorage.setItem('avatar-uri', uri)
+      await AsyncStorage.setItem('avatar-type', 'custom')
+      return
+    }
+
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if(status !== 'granted') {
       alert('We need permission to access your photos!')
@@ -26,15 +41,15 @@ AsyncStorage.getItem('user-name').then(val => { if(val) setName(val) })
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [1, 1], // square crop
+      aspect: [1, 1],
       quality: 0.8,
     })
 
     if(!result.canceled) {
-      const uri = result.assets[0].uri
-      setAvatar(uri)
+      const photoUri = result.assets[0].uri
+      setAvatar(photoUri)
       setAvatarType('custom')
-      await AsyncStorage.setItem('avatar-uri', uri)
+      await AsyncStorage.setItem('avatar-uri', photoUri)
       await AsyncStorage.setItem('avatar-type', 'custom')
     }
   }
@@ -42,17 +57,41 @@ AsyncStorage.getItem('user-name').then(val => { if(val) setName(val) })
   const pickAnimalAvatar = async (emoji) => {
     setAnimalAvatar(emoji)
     setAvatarType('animal')
+    setAvatar(null)
     await AsyncStorage.setItem('animal-avatar', emoji)
     await AsyncStorage.setItem('avatar-type', 'animal')
+    await AsyncStorage.removeItem('avatar-uri')
   }
 
+  const setLoginPhoto = async (uri, type) => {
+    if(type === 'google') {
+      setGooglePhoto(uri)
+      await AsyncStorage.setItem('google-photo', uri)
+    } else if(type === 'apple') {
+      setApplePhoto(uri)
+      await AsyncStorage.setItem('apple-photo', uri)
+    }
+    setAvatar(uri)
+    setAvatarType('custom')
+    await AsyncStorage.setItem('avatar-uri', uri)
+    await AsyncStorage.setItem('avatar-type', 'custom')
+  }
+
+  const reloadProfile = () => loadProfile()
+
+  const currentAvatar = avatarType === 'custom' && avatar ? avatar : null
+
   return {
-    avatar,
+    avatar: currentAvatar,
     animalAvatar,
     avatarType,
     name,
     setName,
+    googlePhoto,
+    applePhoto,
     pickCustomPhoto,
     pickAnimalAvatar,
+    setLoginPhoto,
+    reloadProfile,
   }
 }

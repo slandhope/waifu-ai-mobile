@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from 'expo-notifications';
 import { useEffect, useState } from "react";
-import uuid from 'react-native-uuid';
-import { API_URL, calcStreak, missedDays, todayKey } from "../constants";
+import { calcStreak, missedDays, todayKey } from "../constants";
+import { apiCall, login } from "../utils/api";
 
 const STORAGE_KEY = "clarity-data-v1";
 
@@ -16,24 +17,48 @@ export function useClarityData() {
   useEffect(() => {
     (async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 100)) // wait for native modules
+        await new Promise(resolve => setTimeout(resolve, 100))
 
-        // get or create user ID
         let uid = await AsyncStorage.getItem('user-id')
         if(!uid) {
-          uid = uuid.v4()
+          uid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0
+            const v = c === 'x' ? r : (r & 0x3 | 0x8)
+            return v.toString(16)
+          })
           await AsyncStorage.setItem('user-id', uid)
         }
         setUserId(uid)
 
-        // try to load from server first
+        // get JWT token if we don't have one
+        const existingToken = await AsyncStorage.getItem('auth-token')
+        if(!existingToken) {
+          const userName = await AsyncStorage.getItem('user-name') || 'User'
+          const loginType = await AsyncStorage.getItem('login-type') || 'apple'
+          await login(uid, userName, loginType)
+        }
+
+        // register push token
         try {
-          const res = await fetch(`${API_URL}/api/sync/${uid}`)
+          const { status } = await Notifications.requestPermissionsAsync()
+          if(status === 'granted') {
+            const token = (await Notifications.getExpoPushTokenAsync({
+              projectId: 'c93d34f9-e72f-47e4-bef2-a4bc6467b5a9'
+            })).data
+            await AsyncStorage.setItem('push-token', token)
+            console.log('Push token:', token)
+          }
+        } catch(e) {
+          console.log('Push token error:', e.message)
+        }
+
+        // load from server
+        try {
+          const res = await apiCall('/api/sync/' + uid)
           const serverData = await res.json()
           if(serverData.exists) {
             setHistory(serverData.history || {})
             setSeenMilestones(serverData.seenMilestones || [])
-            // also save to local
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
               history: serverData.history || {},
               messages: [],
@@ -47,41 +72,38 @@ export function useClarityData() {
           console.log('server load failed, using local:', e.message)
         }
 
-        // fallback to local storage
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) {
+        if(raw) {
           const data = JSON.parse(raw);
           setHistory(data.history || {});
           setMessages(data.messages || []);
           setWeeklyInsight(data.weeklyInsight || null);
           setSeenMilestones(data.seenMilestones || []);
         }
-      } catch (e) {
+      } catch(e) {
         console.log('load error:', e)
       }
       setLoaded(true);
     })();
   }, []);
 
-  // save to local storage
   useEffect(() => {
-    if (!loaded) return;
+    if(!loaded) return;
     AsyncStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({ history, messages, weeklyInsight, seenMilestones })
     ).catch(() => {});
   }, [history, messages, weeklyInsight, seenMilestones, loaded]);
 
-  // sync to server every time history changes
   useEffect(() => {
     if(!loaded || !userId) return
     const syncToServer = async () => {
       try {
         const name = await AsyncStorage.getItem('user-name') || 'User'
-        await fetch(`${API_URL}/api/sync`, {
+        const pushToken = await AsyncStorage.getItem('push-token')
+        await apiCall('/api/sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, name, history, seenMilestones })
+          body: JSON.stringify({ userId, name, history, seenMilestones, pushToken })
         })
         console.log('synced to server!')
       } catch(e) {
