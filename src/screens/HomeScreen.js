@@ -126,7 +126,7 @@ function ContentCard({ item, accent, onPlay }) {
 export default function HomeScreen({ data, profile, onSettingsPress, wallpaper }) {
   const { todayHabits, streak, toggleHabit, history } = data
   const { accent } = useTheme()
-  const { steps } = useFitnessData(toggleHabit, todayHabits)
+  const { steps = 0 } = useFitnessData(toggleHabit, todayHabits)
   const realDistance = (steps * 0.76) / 1000
 
   const [celebrating, setCelebrating] = useState(false)
