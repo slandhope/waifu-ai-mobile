@@ -110,7 +110,7 @@ ${Object.entries(habitFrequency).map(([h, c]) => '- ' + h + ': ' + c + '/7 days'
 WEAK HABITS (needs improvement): ${weakHabits.join(', ') || 'none'}
 STRONG HABITS (keep it up): ${strongHabits.join(', ') || 'still building'}
 
-YOUR ROLE:
+YOUR ROLE: 
 1. Give personalized advice based on THEIR actual data above
 2. When asked to generate goals, return ONLY raw JSON, no markdown, no backticks, no explanation. Use ONLY these exact habitIds: sleep, exercise, hydration, meditation, nutrition, breathwork, screens. Example:
 {"goals":[{"habitId":"exercise","target":"30 min movement","tip":"Daily movement boosts energy"},{"habitId":"hydration","target":"2.5L water","tip":"Stay hydrated for focus"}],"newHabit":{"id":"gratitude","label":"5 min gratitude","emoji":"🙏","tip":"Gratitude increases positivity by 15%"}}
@@ -159,7 +159,7 @@ YOUR ROLE:
 
   const generateDailyGoals = async () => {
     setGeneratingGoals(true)
-    const msg = 'Analyze my data and generate my personalized daily goals for today. Return them in the JSON format specified in your instructions. Return ONLY the JSON, nothing else.'
+    const msg = 'Analyze my data and generate my personalized daily goals for today.'
     const newMessages = [...messages, { role: 'user', content: msg }]
     setMessages(newMessages)
     setLoading(true)

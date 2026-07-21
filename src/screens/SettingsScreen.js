@@ -319,11 +319,11 @@ export default function SettingsScreen({ profile, wallpaper, onLogout }) {
                 const next = prev + 1
                 if(next >= 7) {
                   AsyncStorage.setItem('is-pro', 'true').then(() => {
-                    Alert.alert('👑 Pro Unlocked!', 'You are now a Pro user!')
+                    Alert.alert('suprise ')
                   })
                   return 0
                 }
-                if(next >= 4) Alert.alert('', next + ' of 7...')
+                if(next >= 6) Alert.alert('', next + ' of 7...')
                 return next
               })
             }}

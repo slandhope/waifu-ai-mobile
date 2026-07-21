@@ -143,7 +143,7 @@ export function useFitnessData(toggleHabit, todayHabits) {
       let totalSleepMs = 0
       if(sleepSamples && sleepSamples.length > 0) {
         sleepSamples.forEach(sample => {
-          // value 0 = in bed, 1 = asleep, 2 = awake
+          // valuex 0 = in bed, 1 = asleep, 2 = awake
           if(sample.value === 1 || sample.value === 2) {
             const start = new Date(sample.startDate).getTime()
             const end = new Date(sample.endDate).getTime()

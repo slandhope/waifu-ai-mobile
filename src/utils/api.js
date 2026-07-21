@@ -7,9 +7,11 @@ export async function apiCall(endpoint, options = {}) {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
   }
-  console.group('apiCall token:', token ? 'YES' : 'NO', endpoint)
   if(token) {
     headers['Authorization'] = 'Bearer ' + token
+    console.log('apiCall token: YES', endpoint)
+  } else {
+    console.log('apiCall token: NO', endpoint)
   }
 
   const res = await fetch(API_URL + endpoint, {
@@ -17,7 +19,8 @@ export async function apiCall(endpoint, options = {}) {
     headers,
   })
 
-  if(res.status === 401 || res.status === 403) {
+  // ONLY clear token if 401 on a non-DELETE endpoint
+  if(res.status === 401) {
     console.log('Auth failed, clearing token')
     await AsyncStorage.removeItem('auth-token')
   }

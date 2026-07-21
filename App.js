@@ -23,6 +23,7 @@ import AwardsListScreen from './src/screens/AwardsListScreen'
 import CoachScreen from './src/screens/CoachScreen'
 import FitnessScreen from './src/screens/FitnessScreen'
 import HomeScreen from './src/screens/HomeScreen'
+import StudyScreen from './src/screens/StudyScreen'
 import LoginScreen from './src/screens/LoginScreen'
 import OnboardingScreen from './src/screens/OnboardingScreen'
 import PremiumScreen from './src/screens/PremiumScreen'
@@ -36,6 +37,7 @@ const RAILWAY_API = 'https://clarity-app-production-e136.up.railway.app'
 const TABS = [
   { name: 'Home', icon: 'home' },
   { name: 'Coach', icon: 'message-circle' },
+  { name: 'Study', icon: 'book-open' },
   { name: 'Stats', icon: 'bar-chart-2' },
   { name: 'Premium', icon: 'star' },
 ]
@@ -94,6 +96,7 @@ function TabNavigator({ data, profile, wallpaper }) {
         {({ navigation }) => <HomeScreen data={data} profile={profile} wallpaper={wallpaper} onSettingsPress={() => navigation.navigate('Settings')} />}
       </Tab.Screen>
       <Tab.Screen name='Coach'>{() => <CoachScreen data={data} />}</Tab.Screen>
+      <Tab.Screen name='Study'>{() => <StudyScreen />}</Tab.Screen>
       <Tab.Screen name='Stats'>{({ navigation }) => <StatsScreen data={data} navigation={navigation} />}</Tab.Screen>
       <Tab.Screen name='Premium'>{() => <PremiumScreen />}</Tab.Screen>
     </Tab.Navigator>
