@@ -42,3 +42,6 @@ app-example
 /ios
 /android
 src/secrets.js
+src/secrets.js
+node_modules/
+.expo/
