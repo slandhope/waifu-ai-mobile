@@ -55,7 +55,7 @@ export const logoMood = (missed) => {
   return { emoji: "💔", label: "Broken", color: "#555" };
 };
 
-export const API_URL = 'https://clarity-app-production-e136.up.railway.app';
+export const API_URL = 'http://13.50.251.213:3000';
 export const LIGHT_COLORS = {
   bg: '#f8f8f2',
   surface: '#ffffff',
