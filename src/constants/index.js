@@ -55,7 +55,7 @@ export const logoMood = (missed) => {
   return { emoji: "💔", label: "Broken", color: "#555" };
 };
 
-export const API_URL = 'http://13.50.251.213:3000';
+export const API_URL = 'http://13.51.141.42:3000';
 export const LIGHT_COLORS = {
   bg: '#f8f8f2',
   surface: '#ffffff',

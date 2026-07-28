@@ -18,7 +18,7 @@ import { useTheme } from '../hooks/useTheme'
 import { apiCall } from '../utils/api'
 
 const { width } = Dimensions.get('window')
-const RAILWAY_URL = 'https://clarity-app-production-e136.up.railway.app'
+const RAILWAY_URL = 'http://13.51.141.42:3000'
 
 const MEDITATIONS = [
   { id: '1', title: '5 Min Morning', sub: 'Guided Meditation', type: 'audio', isPro: false, image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400', audio: RAILWAY_URL + '/audio/relax-beat.mp3' },

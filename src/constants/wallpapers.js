@@ -1,4 +1,4 @@
-const RAILWAY_URL = 'https://clarity-app-production-e136.up.railway.app'
+const RAILWAY_URL = 'http://13.51.141.42:3000'
 
 export const WALLPAPERS = [
   {

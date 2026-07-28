@@ -32,7 +32,7 @@ import StatsScreen from './src/screens/StatsScreen'
 
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
-const RAILWAY_API = 'https://clarity-app-production-e136.up.railway.app'
+const RAILWAY_API = 'http://13.51.141.42:3000'
 
 const TABS = [
   { name: 'Home', icon: 'home' },
