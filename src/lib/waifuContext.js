@@ -1,5 +1,6 @@
 import { HABITS, calcScore } from '../constants'
 import { loadDailyGoals } from './aiGoalsStore'
+import { loadMemoryCache } from './memorySync'
 
 export function buildWaifuContext({
   todayHabits = [],
@@ -11,6 +12,7 @@ export function buildWaifuContext({
   coins = 0,
   coachGoals = [],
   bonusHabit = null,
+  memorySnippets = [],
 }) {
   const score = calcScore(todayHabits)
   const done = HABITS.filter((h) => todayHabits.includes(h.id)).map((h) => h.shortLabel)
@@ -31,15 +33,28 @@ export function buildWaifuContext({
     `Shop coins: ${coins} (complete habits in the Habits panel to earn more).`,
     focus ? `Coach focus today: ${focus}.` : '',
     bonusHabit ? `Bonus habit from coach: ${bonusHabit.label} — ${bonusHabit.tip || ''}.` : '',
+    memorySnippets.length ? `Things you remember about them:\n${memorySnippets.join('\n')}` : '',
     'If they ask about habits, steps, sleep, streak, or rewards — answer from this data warmly.',
   ].filter(Boolean).join('\n')
 }
 
 export async function buildWaifuContextAsync(base) {
   const daily = await loadDailyGoals()
+  const cache = await loadMemoryCache()
+  const snippets = []
+  for (const f of (cache.userProfile?.facts || []).slice(-5)) {
+    if (f) snippets.push(`- ${f}`)
+  }
+  for (const ep of (cache.episodes || []).slice(-3)) {
+    if (ep?.summary) snippets.push(`- [memory] ${ep.summary}`)
+  }
+  for (const m of (cache.brainMemories || []).slice(-3)) {
+    if (m?.text) snippets.push(`- [saved] ${m.text}`)
+  }
   return buildWaifuContext({
     ...base,
     coachGoals: daily.goals || [],
     bonusHabit: daily.newHabit,
+    memorySnippets: snippets,
   })
 }

@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Platform } from 'react-native'
+import { Alert, DeviceEventEmitter, Platform } from 'react-native'
 import { localDateKey } from '../constants'
+import { pushExtrasSoon, SYNC_EXTRAS_APPLIED } from '../lib/extrasSync'
 import { apiCall } from '../utils/api'
 import { isExpoGo } from '../utils/isExpoGo'
 
@@ -24,6 +25,7 @@ async function saveStepsHistory(stepCount) {
     const keys = Object.keys(hist).sort()
     if (keys.length > 90) keys.slice(0, keys.length - 90).forEach((k) => delete hist[k])
     await AsyncStorage.setItem(STEPS_HISTORY_KEY, JSON.stringify(hist))
+    pushExtrasSoon()
     return hist
   } catch {
     return {}
@@ -74,12 +76,16 @@ export function useFitnessData(toggleHabit, todayHabits) {
 
   useEffect(() => {
     loadStepsHistory().then(setStepsHistory)
+    const sub = DeviceEventEmitter.addListener(SYNC_EXTRAS_APPLIED, () => {
+      loadStepsHistory().then(setStepsHistory)
+    })
     AsyncStorage.getItem('health-connected').then(val => {
       if (val === 'true') {
         setConnected(true)
         fetchData()
       }
     })
+    return () => sub.remove()
   }, [fetchData])
 
   useEffect(() => {

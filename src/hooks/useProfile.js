@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as ImagePicker from 'expo-image-picker'
 import { useEffect, useState } from 'react'
+import { DeviceEventEmitter } from 'react-native'
+import { pushExtrasSoon, SYNC_EXTRAS_APPLIED } from '../lib/extrasSync'
 
 export function useProfile() {
   const [avatar, setAvatar] = useState(null)
@@ -12,6 +14,8 @@ export function useProfile() {
 
   useEffect(() => {
     loadProfile()
+    const sub = DeviceEventEmitter.addListener(SYNC_EXTRAS_APPLIED, () => loadProfile())
+    return () => sub.remove()
   }, [])
 
   const loadProfile = async () => {
@@ -29,6 +33,7 @@ export function useProfile() {
       setAvatarType('custom')
       await AsyncStorage.setItem('avatar-uri', uri)
       await AsyncStorage.setItem('avatar-type', 'custom')
+      pushExtrasSoon()
       return
     }
 
@@ -51,6 +56,7 @@ export function useProfile() {
       setAvatarType('custom')
       await AsyncStorage.setItem('avatar-uri', photoUri)
       await AsyncStorage.setItem('avatar-type', 'custom')
+      pushExtrasSoon()
     }
   }
 
@@ -61,6 +67,7 @@ export function useProfile() {
     await AsyncStorage.setItem('animal-avatar', emoji)
     await AsyncStorage.setItem('avatar-type', 'animal')
     await AsyncStorage.removeItem('avatar-uri')
+    pushExtrasSoon()
   }
 
   const setLoginPhoto = async (uri, type) => {
@@ -75,6 +82,7 @@ export function useProfile() {
     setAvatarType('custom')
     await AsyncStorage.setItem('avatar-uri', uri)
     await AsyncStorage.setItem('avatar-type', 'custom')
+    pushExtrasSoon()
   }
 
   const reloadProfile = () => loadProfile()

@@ -2,7 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import { calcStreak, missedDays, todayKey } from "../constants";
 import { mergeCoachFromServer, goalsToCloudPayload, loadDailyGoals } from "../lib/aiGoalsStore";
-import { pullStudyFromCloud } from "../lib/studySync";
+import { pullAllFromCloud, pushAllSoon } from "../lib/cloudSync";
+import { collectLocalExtras } from "../lib/extrasSync";
 import { apiCall, fetchMe } from "../utils/api";
 import { isExpoGo } from "../utils/isExpoGo";
 
@@ -67,8 +68,12 @@ export function useClarityData() {
         if (token) {
           serverData = await fetchMe()
           if (serverData) {
-            await mergeCoachFromServer(serverData)
-            pullStudyFromCloud().catch(() => {})
+            await pullAllFromCloud(serverData)
+            const refreshed = await AsyncStorage.getItem(STORAGE_KEY)
+            if (refreshed) {
+              const parsed = JSON.parse(refreshed)
+              if (parsed.weeklyInsight) setWeeklyInsight(parsed.weeklyInsight)
+            }
           }
         }
         if (serverData?.exists || serverData?.history) {
@@ -114,11 +119,13 @@ export function useClarityData() {
         const name = await AsyncStorage.getItem('user-name') || 'User'
         const pushToken = await AsyncStorage.getItem('push-token')
         const coach = goalsToCloudPayload(await loadDailyGoals())
+        const syncExtras = await collectLocalExtras()
         await apiCall('/api/sync', {
           method: 'POST',
           body: JSON.stringify({
             userId, name, history, seenMilestones, pushToken,
             ...(coach || {}),
+            syncExtras: { ...syncExtras, weeklyInsight: weeklyInsight || syncExtras.weeklyInsight || null },
           })
         })
         console.log('synced to server!')
@@ -127,7 +134,7 @@ export function useClarityData() {
       }
     }
     syncToServer()
-  }, [history, seenMilestones, loaded, userId])
+  }, [history, seenMilestones, weeklyInsight, loaded, userId])
 
   const today = todayKey();
   const todayHabits = history[today] || [];
@@ -145,11 +152,15 @@ export function useClarityData() {
 
   const addMessage = (msg) => setMessages((prev) => [...prev.slice(-30), msg]);
   const markMilestoneSeen = (val) => setSeenMilestones((prev) => [...prev, val]);
+  const setWeeklyInsightSynced = (val) => {
+    setWeeklyInsight(val)
+    pushAllSoon()
+  }
 
   return {
     loaded, history, todayHabits, streak, missed,
     messages, setMessages, addMessage,
-    weeklyInsight, setWeeklyInsight,
+    weeklyInsight, setWeeklyInsight: setWeeklyInsightSynced,
     seenMilestones, markMilestoneSeen, toggleHabit,
   };
 }

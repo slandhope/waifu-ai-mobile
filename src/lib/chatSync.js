@@ -1,11 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { apiCall } from '../utils/api'
 
 const CHAT_KEY = 'waifu-chat-log-v1'
 const CHAT_CAP = 5000
-const SYNC_WIRE_CAP = 800
 
-function mergeChatLogs(a, b) {
+export function mergeChatLogs(a, b) {
   const map = new Map()
   for (const m of [...(a || []), ...(b || [])]) {
     if (!m?.text) continue
@@ -57,7 +55,7 @@ export async function appendChatExchange(userText, assistantText) {
   if (assistantText) log.push(toPcEntry('asuka', assistantText))
   const trimmed = log.length > CHAT_CAP ? log.slice(-CHAT_CAP) : log
   await saveChatLog(trimmed)
-  pushChatSoon()
+  import('./memorySync').then((m) => m.pushMemorySoon()).catch(() => {})
   return trimmed
 }
 
@@ -67,82 +65,21 @@ export async function appendChatMessage(role, text) {
   log.push(toPcEntry(role, text))
   const trimmed = log.length > CHAT_CAP ? log.slice(-CHAT_CAP) : log
   await saveChatLog(trimmed)
-  pushChatSoon()
+  import('./memorySync').then((m) => m.pushMemorySoon()).catch(() => {})
   return trimmed
 }
 
-async function pushChatToCloud() {
-  try {
-    const token = await AsyncStorage.getItem('auth-token')
-    if (!token) return false
-
-    const res = await apiCall('/state')
-    if (res.status === 401) return false
-    if (!res.ok) return false
-
-    const cloud = await res.json()
-    const cloudMem = cloud?.memory || {}
-    const cloudSync = cloudMem.__sync || {}
-    const localChat = await loadChatLog()
-    const mergedChat = mergeChatLogs(localChat, cloudSync.chatLog || [])
-
-    if (mergedChat.length !== localChat.length) {
-      await saveChatLog(mergedChat)
-    }
-
-    const newMemory = {
-      ...cloudMem,
-      __sync: {
-        ...cloudSync,
-        v: 2,
-        chatLog: mergedChat.slice(-SYNC_WIRE_CAP),
-      },
-    }
-
-    const patch = await apiCall('/state', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        memory: newMemory,
-        updatedAt: Math.max(Date.now(), cloud.updatedAt || 0),
-      }),
-    })
-    return patch.ok
-  } catch (e) {
-    console.log('[chatSync] push skipped:', e.message)
-    return false
-  }
-}
-
 export async function pullChatFromCloud() {
-  try {
-    const token = await AsyncStorage.getItem('auth-token')
-    if (!token) return null
-
-    const res = await apiCall('/state')
-    if (res.status === 401 || !res.ok) return null
-
-    const cloud = await res.json()
-    const cloudChat = cloud?.memory?.__sync?.chatLog || []
-    if (!cloudChat.length) return await loadChatLog()
-
-    const localChat = await loadChatLog()
-    const merged = mergeChatLogs(localChat, cloudChat)
-    await saveChatLog(merged)
-
-    if (merged.length > localChat.length) {
-      pushChatToCloud().catch(() => {})
-    }
-    return merged
-  } catch (e) {
-    console.log('[chatSync] pull skipped:', e.message)
-    return null
-  }
+  const { pullMemoryFromCloud } = await import('./memorySync')
+  return pullMemoryFromCloud()
 }
 
 let _pushTimer = null
 export function pushChatSoon(ms = 2000) {
   clearTimeout(_pushTimer)
-  _pushTimer = setTimeout(() => { pushChatToCloud().catch(() => {}) }, ms)
+  _pushTimer = setTimeout(() => {
+    import('./memorySync').then((m) => m.pushMemoryToCloud()).catch(() => {})
+  }, ms)
 }
 
 export async function getApiHistoryForReply(limit = 20) {

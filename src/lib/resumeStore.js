@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { pushExtrasSoon } from './extrasSync'
 
 const RESUME_PROFILE_KEY = 'create-studio-resume-v1'
 const CREATE_HISTORY_KEY = 'create-studio-history-v1'
@@ -30,6 +31,7 @@ export async function saveResumeProfile(profile) {
     updatedAt: Date.now(),
   }
   await AsyncStorage.setItem(RESUME_PROFILE_KEY, JSON.stringify(payload))
+  pushExtrasSoon()
   return payload
 }
 
@@ -46,6 +48,7 @@ export async function loadWebsiteDraft() {
 export async function saveWebsiteDraft(draft) {
   const payload = { ...draft, updatedAt: Date.now() }
   await AsyncStorage.setItem(WEBSITE_DRAFT_KEY, JSON.stringify(payload))
+  pushExtrasSoon()
   return payload
 }
 
@@ -69,6 +72,7 @@ export async function addCreateHistory(entry) {
   }
   const next = [item, ...list.filter((h) => h.id !== item.id)].slice(0, MAX_HISTORY)
   await AsyncStorage.setItem(CREATE_HISTORY_KEY, JSON.stringify(next))
+  pushExtrasSoon()
   return next
 }
 
@@ -76,6 +80,7 @@ export async function removeCreateHistory(id) {
   const list = await loadCreateHistory()
   const next = list.filter((h) => h.id !== id)
   await AsyncStorage.setItem(CREATE_HISTORY_KEY, JSON.stringify(next))
+  pushExtrasSoon()
   return next
 }
 

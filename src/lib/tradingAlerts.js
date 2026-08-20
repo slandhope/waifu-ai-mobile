@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { pushExtrasSoon } from './extrasSync'
 
 const SETTINGS_KEY = 'trading-alert-settings-v1'
 const HISTORY_KEY = 'trading-alert-history-v1'
@@ -19,6 +20,7 @@ export async function getAlertSettings() {
 
 export async function saveAlertSettings(settings) {
   await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+  pushExtrasSoon()
 }
 
 export async function pushAlertHistory(entry) {
@@ -27,6 +29,7 @@ export async function pushAlertHistory(entry) {
     const list = raw ? JSON.parse(raw) : []
     list.unshift({ ...entry, id: Date.now(), time: Date.now() })
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 50)))
+    pushExtrasSoon()
   } catch (_e) {}
 }
 
@@ -40,4 +43,5 @@ export async function getAlertHistory() {
 
 export async function clearAlertHistory() {
   await AsyncStorage.removeItem(HISTORY_KEY)
+  pushExtrasSoon()
 }

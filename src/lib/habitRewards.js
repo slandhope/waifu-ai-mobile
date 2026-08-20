@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { todayKey } from '../constants'
+import { pushExtrasSoon } from './extrasSync'
 
 const REWARD_KEY = 'habit-rewards-day-v1'
 
@@ -24,6 +25,7 @@ export async function loadTodayRewards() {
 export async function saveTodayRewards(state) {
   try {
     await AsyncStorage.setItem(REWARD_KEY, JSON.stringify(state))
+    pushExtrasSoon()
   } catch {}
 }
 

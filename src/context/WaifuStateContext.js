@@ -11,7 +11,8 @@ import {
   syncActiveEquipped,
 } from '../lib/waifuCare'
 import { loadLocalCare, persistCare, pullAndMergeCare } from '../lib/waifuStateSync'
-import { pullChatFromCloud } from '../lib/chatSync'
+import { pullAllFromCloud } from '../lib/cloudSync'
+import { fetchMe } from '../utils/api'
 
 const WaifuStateContext = createContext(null)
 
@@ -41,9 +42,10 @@ export function WaifuStateProvider({ children }) {
       let local = await loadLocalCare()
       const token = await AsyncStorage.getItem('auth-token')
       if (token) {
+        const serverData = await fetchMe()
+        if (serverData) await pullAllFromCloud(serverData)
         const result = await pullAndMergeCare(local)
         local = result.care
-        pullChatFromCloud().catch(() => {})
       }
       if (!cancelled) {
         const next = applyDecay(local)

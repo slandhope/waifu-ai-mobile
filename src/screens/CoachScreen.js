@@ -12,6 +12,7 @@ import WhiteboardCanvas from '../components/WhiteboardCanvas'
 import { teachOnWhiteboard } from '../lib/whiteboard'
 import { HABITS, calcScore, localDateKey } from '../constants'
 import { saveDailyGoals } from '../lib/aiGoalsStore'
+import { loadCoachChat, coachChatToUiMessages, appendCoachMessages } from '../lib/coachChatStore'
 import { apiCall } from '../utils/api'
 
 const QUICK_PROMPTS = [
@@ -34,6 +35,17 @@ export default function CoachScreen({ data, wallpaper }) {
   const [wbLoading, setWbLoading] = useState(false)
   const [wbData, setWbData] = useState(null)
   const scrollRef = useRef(null)
+
+  useEffect(() => {
+    loadCoachChat().then((list) => {
+      if (list.length) setMessages(coachChatToUiMessages(list))
+    })
+  }, [])
+
+  const pushAssistant = async (content) => {
+    setMessages((prev) => [...prev, { role: 'assistant', content }])
+    await appendCoachMessages([{ role: 'assistant', content }])
+  }
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true))
@@ -116,6 +128,7 @@ YOUR ROLE:
     setInput('')
     const newMessages = [...messages, { role: 'user', content: msg }]
     setMessages(newMessages)
+    await appendCoachMessages([{ role: 'user', content: msg }])
     setLoading(true)
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
 
@@ -130,14 +143,14 @@ YOUR ROLE:
         })
       })
       if (!res.ok) {
-        setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I'm having trouble connecting. Try again!" }])
+        await pushAssistant("Sorry, I'm having trouble connecting. Try again!")
         return
       }
       const json = await res.json()
       const reply = json.content?.[0]?.text || "I'm here to help with your waifu.ai journey!"
-      setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+      await pushAssistant(reply)
     } catch(e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I'm having trouble connecting. Try again!" }])
+      await pushAssistant("Sorry, I'm having trouble connecting. Try again!")
     }
     setLoading(false)
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
@@ -154,6 +167,7 @@ YOUR ROLE:
     const msg = 'Analyze my data and generate my personalized daily goals for today.'
     const newMessages = [...messages, { role: 'user', content: msg }]
     setMessages(newMessages)
+    await appendCoachMessages([{ role: 'user', content: msg }])
     setLoading(true)
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
 
@@ -168,7 +182,7 @@ YOUR ROLE:
         })
       })
       if (!res.ok) {
-        setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, couldn't generate goals right now." }])
+        await pushAssistant("Sorry, couldn't generate goals right now.")
         return
       }
       const json = await res.json()
@@ -180,20 +194,17 @@ YOUR ROLE:
           const parsed = JSON.parse(jsonMatch[0])
           await saveDailyGoals(parsed)
           const count = (parsed.goals || []).length + (parsed.newHabit ? 1 : 0)
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: count > 0
-              ? `Done! ${count} personalized focus${count > 1 ? ' areas' : ''} saved — open Habits on Home to see them.`
-              : 'Goals saved! Open Habits on Home to track them.',
-          }])
+          await pushAssistant(count > 0
+            ? `Done! ${count} personalized focus${count > 1 ? ' areas' : ''} saved — open Habits on Home to see them.`
+            : 'Goals saved! Open Habits on Home to track them.')
         } else {
-          setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+          await pushAssistant(reply)
         }
       } catch(e) {
-        setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+        await pushAssistant(reply)
       }
     } catch(e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, couldn't generate goals right now." }])
+      await pushAssistant("Sorry, couldn't generate goals right now.")
     }
 
     setLoading(false)
@@ -208,7 +219,7 @@ YOUR ROLE:
     setWbLoading(false)
     if (r?.success) {
       setWbData(r)
-      setMessages(prev => [...prev, { role: 'assistant', content: r.narration || `Here's ${topic} on the board~` }])
+      await pushAssistant(r.narration || `Here's ${topic} on the board~`)
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
     }
   }
