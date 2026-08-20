@@ -11,9 +11,9 @@ const { width } = Dimensions.get('window')
 const slides = [
   {
     emoji: '🧠',
-    title: 'Welcome to Clarity',
-    subtitle: 'Your daily mental clarity coach.',
-    desc: 'Track 7 science-backed habits every day and see your clarity score improve over time.',
+    title: 'Welcome to waifu.ai',
+    subtitle: 'Your daily wellness companion.',
+    desc: 'Track 7 science-backed habits every day and see your waifu.ai score improve over time.',
   },
   {
     emoji: '🔥',
@@ -25,7 +25,7 @@ const slides = [
     emoji: '✨',
     title: 'Meet your AI coach',
     subtitle: 'Science-grounded, never preachy.',
-    desc: 'Complete your habits to unlock your personal AI coach. Ask it anything about your mental clarity.',
+    desc: 'Complete your habits to unlock your personal AI coach. Ask it anything about your wellness.',
   },
 ]
 

@@ -1,15 +1,18 @@
 import { Feather } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect'
+import { useNavigation } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { API_URL, HABITS, calcScore } from '../constants'
-import { useTheme } from '../hooks/useTheme'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import GlassSurface from '../components/GlassSurface'
+import TabScreenShell from '../components/TabScreenShell'
+import WhiteboardCanvas from '../components/WhiteboardCanvas'
+import { teachOnWhiteboard } from '../lib/whiteboard'
+import { HABITS, calcScore, localDateKey } from '../constants'
+import { saveDailyGoals } from '../lib/aiGoalsStore'
 import { apiCall } from '../utils/api'
-
 
 const QUICK_PROMPTS = [
   'Why is sleep so important for focus?',
@@ -17,24 +20,10 @@ const QUICK_PROMPTS = [
   'Explain the science behind my streak',
 ]
 
-function GlassBox({ children, style, borderRadius = 20 }) {
-  const glassAvailable = isGlassEffectAPIAvailable()
-  if(glassAvailable) {
-    return (
-      <GlassView style={[{ borderRadius, overflow: 'hidden' }, style]} glassEffectStyle='regular' colorScheme='system'>
-        {children}
-      </GlassView>
-    )
-  }
-  return (
-    <View style={[{ borderRadius, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }, style]}>
-      {children}
-    </View>
-  )
-}
+const WHITEBOARD_TOPICS = ['RSI oversold', 'Liquidation', 'Funding rate', 'Risk/reward', 'Sleep & focus']
 
-export default function CoachScreen({ data }) {
-  const { accent } = useTheme()
+export default function CoachScreen({ data, wallpaper }) {
+  const navigation = useNavigation()
   const insets = useSafeAreaInsets()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -42,6 +31,8 @@ export default function CoachScreen({ data }) {
   const [generatingInsight, setGeneratingInsight] = useState(false)
   const [generatingGoals, setGeneratingGoals] = useState(false)
   const [isKeyboardVisible, setKeyboardVisible] = useState(false)
+  const [wbLoading, setWbLoading] = useState(false)
+  const [wbData, setWbData] = useState(null)
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -72,7 +63,7 @@ export default function CoachScreen({ data }) {
     const last7 = Array.from({ length: 7 }, (_, i) => {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      const key = d.toISOString().split('T')[0]
+      const key = localDateKey(d)
       const habits = history[key] || []
       return { date: key, habits, score: calcScore(habits) }
     })
@@ -95,11 +86,11 @@ export default function CoachScreen({ data }) {
       .filter(([_, count]) => count >= 5)
       .map(([label]) => label)
 
-    return `You are Clarity Coach — a personal AI wellness coach with access to the user's real health data.
+    return `You are waifu.ai Coach — a personal AI wellness coach with access to the user's real health data.
 
 USER DATA:
 - Current streak: ${streak} days
-- Today's clarity score: ${todayScore}/100
+- Today's waifu.ai score: ${todayScore}/100
 - 7-day average score: ${avgScore}/100
 - Today's completed habits: ${completedHabits.join(', ') || 'none yet'}
 - Today's missed habits: ${missedHabits.join(', ') || 'all done!'}
@@ -130,9 +121,6 @@ YOUR ROLE:
 
     try {
       const userId = await AsyncStorage.getItem('user-id')
-      // ADD THESE TWO LINES HERE:
-    console.log("Coach is using ID:", userId);
-    console.log("Fetching from:", API_URL + '/api/chat');
       const res = await apiCall('/api/chat', {
         method: 'POST',
         body: JSON.stringify({
@@ -141,8 +129,12 @@ YOUR ROLE:
           userId: userId
         })
       })
+      if (!res.ok) {
+        setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I'm having trouble connecting. Try again!" }])
+        return
+      }
       const json = await res.json()
-      const reply = json.content?.[0]?.text || "I'm here to help with your mental clarity journey!"
+      const reply = json.content?.[0]?.text || "I'm here to help with your waifu.ai journey!"
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
     } catch(e) {
       setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I'm having trouble connecting. Try again!" }])
@@ -166,31 +158,34 @@ YOUR ROLE:
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
 
     try {
+      const userId = await AsyncStorage.getItem('user-id')
       const res = await apiCall('/api/chat', {
         method: 'POST',
-       
         body: JSON.stringify({
           system: buildSystemPrompt(),
-          messages: newMessages.slice(-6)
+          messages: newMessages.slice(-6),
+          userId,
         })
       })
+      if (!res.ok) {
+        setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, couldn't generate goals right now." }])
+        return
+      }
       const json = await res.json()
-      console.log('chat response:', JSON.stringify(json))
       const reply = json.content?.[0]?.text || ''
 
       try {
         const jsonMatch = reply.match(/\{[\s\S]*\}/)
         if(jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0])
-          const today = new Date().toISOString().split('T')[0]
-          if(parsed.goals) {
-            await AsyncStorage.setItem('ai-goals', JSON.stringify(parsed.goals))
-            await AsyncStorage.setItem('ai-goals-date', today)
-          }
-          if(parsed.newHabit) {
-            await AsyncStorage.setItem('ai-new-habit', JSON.stringify(parsed.newHabit))
-          }
-          setMessages(prev => [...prev, { role: 'assistant', content: 'Your personalized goals for today have been set! Check your Home screen to see them.' }])
+          await saveDailyGoals(parsed)
+          const count = (parsed.goals || []).length + (parsed.newHabit ? 1 : 0)
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: count > 0
+              ? `Done! ${count} personalized focus${count > 1 ? ' areas' : ''} saved — open Habits on Home to see them.`
+              : 'Goals saved! Open Habits on Home to track them.',
+          }])
         } else {
           setMessages(prev => [...prev, { role: 'assistant', content: reply }])
         }
@@ -206,29 +201,42 @@ YOUR ROLE:
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
   }
 
+  async function drawWhiteboard(topic) {
+    setWbLoading(true)
+    setWbData(null)
+    const r = await teachOnWhiteboard(topic)
+    setWbLoading(false)
+    if (r?.success) {
+      setWbData(r)
+      setMessages(prev => [...prev, { role: 'assistant', content: r.narration || `Here's ${topic} on the board~` }])
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
+    }
+  }
+
   return (
-    <View style={{ flex: 1 }}>
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={0}
-        >
+    <TabScreenShell wallpaper={wallpaper}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
           {/* header */}
           <View style={styles.header}>
             <View>
               <Text style={styles.dateText}>{getDate()}</Text>
               <Text style={styles.greeting}>{getGreeting()}, ✨</Text>
             </View>
-            <GlassBox style={styles.profilePill} borderRadius={30}>
-              <View style={styles.profilePillInner}>
-                <View style={styles.avatarCircle}>
-                  <Feather name='user' size={14} color='#fff' />
+            <GlassSurface borderRadius={30} style={styles.profilePill}>
+              <TouchableOpacity onPress={() => navigation.getParent?.()?.navigate('Settings')} activeOpacity={0.85}>
+                <View style={styles.profilePillInner}>
+                  <View style={styles.avatarCircle}>
+                    <Feather name='user' size={14} color='#6c5ce7' />
+                  </View>
+                  <Text style={styles.profileName}>Profile</Text>
+                  <Feather name='edit-2' size={13} color='rgba(0,0,0,0.35)' />
                 </View>
-                <Text style={styles.profileName}>G'day</Text>
-                <Feather name='edit-2' size={13} color='rgba(255,255,255,0.7)' />
-              </View>
-            </GlassBox>
+              </TouchableOpacity>
+            </GlassSurface>
           </View>
 
           <View style={styles.divider} />
@@ -246,44 +254,66 @@ YOUR ROLE:
                 <Text style={styles.coachAvatarIcon}>✦</Text>
               </LinearGradient>
               <View>
-                <Text style={styles.coachName}>Clarity Coach</Text>
+                <Text style={styles.coachName}>waifu.ai Coach</Text>
                 <Text style={styles.coachSub}>Science-grounded, never preachy</Text>
               </View>
             </View>
 
             {/* action cards */}
             <View style={styles.insightWrap}>
-              <GlassBox style={styles.insightCard} borderRadius={16}>
+              <GlassSurface borderRadius={16} style={styles.insightCard}>
                 <TouchableOpacity onPress={generateInsight} activeOpacity={0.8} style={styles.insightInner} disabled={generatingInsight}>
                   <Text style={styles.insightLabel}>✦  WEEKLY INSIGHT</Text>
                   {generatingInsight
-                    ? <ActivityIndicator color='#fff' style={{ marginTop: 4 }} />
+                    ? <ActivityIndicator color='#6c5ce7' style={{ marginTop: 4 }} />
                     : <Text style={styles.insightCta}>Generate my insight →</Text>
                   }
                 </TouchableOpacity>
-              </GlassBox>
+              </GlassSurface>
 
-              <GlassBox style={[styles.insightCard, { marginTop: 10 }]} borderRadius={16}>
+              <GlassSurface borderRadius={16} style={[styles.insightCard, { marginTop: 10 }]}>
                 <TouchableOpacity onPress={generateDailyGoals} activeOpacity={0.8} style={styles.insightInner} disabled={generatingGoals}>
                   <Text style={styles.insightLabel}>🎯  DAILY AI GOALS</Text>
                   {generatingGoals
-                    ? <ActivityIndicator color='#fff' style={{ marginTop: 4 }} />
+                    ? <ActivityIndicator color='#6c5ce7' style={{ marginTop: 4 }} />
                     : <Text style={styles.insightCta}>Generate my goals for today →</Text>
                   }
                 </TouchableOpacity>
-              </GlassBox>
+              </GlassSurface>
+            </View>
+
+            <View style={styles.insightWrap}>
+              <GlassSurface borderRadius={16} style={styles.insightCard}>
+                <View style={styles.insightInner}>
+                  <Text style={styles.insightLabel}>🖊️  WHITEBOARD</Text>
+                  <Text style={[styles.insightCta, { fontSize: 13, fontWeight: '500', marginBottom: 8 }]}>
+                    PC-style animated board for trading & wellness concepts (Study tab = full classroom)
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {WHITEBOARD_TOPICS.map((t) => (
+                      <TouchableOpacity key={t} onPress={() => drawWhiteboard(t)} disabled={wbLoading}>
+                        <GlassSurface borderRadius={20} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#6c5ce7' }}>{t}</Text>
+                        </GlassSurface>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {wbLoading && <ActivityIndicator color="#6c5ce7" style={{ marginTop: 12 }} />}
+                  {!!wbData?.cmds?.length && <WhiteboardCanvas cmds={wbData.cmds} />}
+                </View>
+              </GlassSurface>
             </View>
 
             {/* empty state */}
             {messages.length === 0 && (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>Ask me anything about your mental clarity.</Text>
+                <Text style={styles.emptyText}>Ask me anything about your wellness.</Text>
                 <View style={styles.quickPrompts}>
                   {QUICK_PROMPTS.map((p, i) => (
                     <TouchableOpacity key={i} onPress={() => sendMessage(p)} activeOpacity={0.8}>
-                      <GlassBox style={styles.promptPill} borderRadius={30}>
+                      <GlassSurface borderRadius={30} style={styles.promptPill}>
                         <Text style={styles.promptText}>{p}</Text>
-                      </GlassBox>
+                      </GlassSurface>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -299,12 +329,12 @@ YOUR ROLE:
                       <Text style={{ fontSize: 10, color: '#fff' }}>✦</Text>
                     </LinearGradient>
                   )}
-                  <GlassBox
-                    style={[styles.msgBubble, msg.role === 'user' ? styles.msgBubbleUser : styles.msgBubbleAssistant]}
+                  <GlassSurface
+                    style={[styles.msgBubble, msg.role === 'user' && styles.msgBubbleUser]}
                     borderRadius={18}
                   >
                     <Text style={styles.msgText}>{msg.content}</Text>
-                  </GlassBox>
+                  </GlassSurface>
                 </View>
               ))}
               {loading && (
@@ -312,9 +342,9 @@ YOUR ROLE:
                   <LinearGradient colors={['#7c3aed', '#a855f7']} style={styles.msgAvatar}>
                     <Text style={{ fontSize: 10, color: '#fff' }}>✦</Text>
                   </LinearGradient>
-                  <GlassBox style={styles.msgBubble} borderRadius={18}>
-                    <ActivityIndicator color='#fff' size='small' />
-                  </GlassBox>
+                  <GlassSurface style={styles.msgBubble} borderRadius={18}>
+                    <ActivityIndicator color='#6c5ce7' size='small' />
+                  </GlassSurface>
                 </View>
               )}
             </View>
@@ -324,11 +354,11 @@ YOUR ROLE:
 
           {/* input bar */}
           <View style={[styles.inputContainer, { paddingBottom: isKeyboardVisible ? 12 : TAB_BAR_HEIGHT }]}>
-            <GlassBox style={styles.inputBox} borderRadius={30}>
+            <GlassSurface borderRadius={30} style={styles.inputBox}>
               <TextInput
                 style={styles.input}
                 placeholder='Ask your coach...'
-                placeholderTextColor='rgba(255,255,255,0.4)'
+                placeholderTextColor='rgba(0,0,0,0.35)'
                 value={input}
                 onChangeText={setInput}
                 onSubmitEditing={() => sendMessage()}
@@ -337,56 +367,53 @@ YOUR ROLE:
               />
               <TouchableOpacity
                 onPress={() => sendMessage()}
-                style={[styles.sendBtn, { backgroundColor: accent.primary }]}
+                style={styles.sendBtn}
               >
                 <Feather name='send' size={16} color='#fff' />
               </TouchableOpacity>
-            </GlassBox>
+            </GlassSurface>
           </View>
 
         </KeyboardAvoidingView>
-      </SafeAreaView>
-    </View>
+    </TabScreenShell>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 12, marginBottom: 12 },
-  dateText: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 2 },
-  greeting: { fontSize: 24, fontWeight: '700', color: '#fff' },
+  dateText: { fontSize: 13, color: 'rgba(0,0,0,0.45)', marginBottom: 2 },
+  greeting: { fontSize: 24, fontWeight: '700', color: '#1a1a1a' },
   profilePill: { overflow: 'hidden' },
   profilePillInner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  avatarCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  profileName: { fontSize: 13, color: '#fff', fontWeight: '500' },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 20, marginBottom: 16 },
+  avatarCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(108,92,231,0.15)', alignItems: 'center', justifyContent: 'center' },
+  profileName: { fontSize: 13, color: '#1a1a1a', fontWeight: '600' },
+  divider: { height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginHorizontal: 20, marginBottom: 16 },
   coachRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, marginBottom: 16 },
   coachAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   coachAvatarIcon: { fontSize: 20, color: '#fff' },
-  coachName: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  coachSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  coachName: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  coachSub: { fontSize: 13, color: 'rgba(0,0,0,0.45)', marginTop: 2 },
   insightWrap: { paddingHorizontal: 20, marginBottom: 16 },
   insightCard: {},
   insightInner: { padding: 16 },
-  insightLabel: { fontSize: 11, letterSpacing: 1.5, color: 'rgba(255,255,255,0.6)', marginBottom: 6 },
-  insightCta: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  insightLabel: { fontSize: 11, letterSpacing: 1.5, color: 'rgba(0,0,0,0.45)', marginBottom: 6, fontWeight: '700' },
+  insightCta: { fontSize: 16, fontWeight: '600', color: '#1a1a1a' },
   messagesContent: { paddingHorizontal: 20, paddingBottom: 20 },
   emptyState: { alignItems: 'center', paddingTop: 20 },
-  emptyText: { fontSize: 15, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginBottom: 24 },
+  emptyText: { fontSize: 15, color: 'rgba(0,0,0,0.55)', textAlign: 'center', marginBottom: 24 },
   quickPrompts: { width: '100%', gap: 12 },
   promptPill: { width: '100%' },
-  promptText: { fontSize: 14, color: '#fff', padding: 16, textAlign: 'center' },
+  promptText: { fontSize: 14, color: '#1a1a1a', padding: 16, textAlign: 'center', fontWeight: '500' },
   messages: { gap: 12 },
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   msgRowUser: { justifyContent: 'flex-end' },
   msgRowAssistant: { justifyContent: 'flex-start' },
   msgAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   msgBubble: { maxWidth: '80%', padding: 12 },
-  msgBubbleUser: {},
-  msgBubbleAssistant: {},
-  msgText: { fontSize: 14, color: '#fff', lineHeight: 20 },
+  msgBubbleUser: { backgroundColor: 'rgba(108,92,231,0.12)' },
+  msgText: { fontSize: 14, color: '#1a1a1a', lineHeight: 20 },
   inputContainer: { paddingHorizontal: 16, paddingTop: 8 },
   inputBox: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
-  input: { flex: 1, fontSize: 15, color: '#fff', height: 40 },
-  sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, fontSize: 15, color: '#1a1a1a', height: 40 },
+  sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#6c5ce7' },
 })

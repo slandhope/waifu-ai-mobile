@@ -3,19 +3,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import { registerRootComponent } from 'expo'
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect'
 import * as Haptics from 'expo-haptics'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, TouchableOpacity, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
+import { Live2DProvider } from './src/context/Live2DContext'
+import { FitnessProvider } from './src/context/FitnessContext'
+import { WaifuStateProvider } from './src/context/WaifuStateContext'
+
 import { useClarityData } from './src/hooks/useClarityData'
-import { useFitnessData } from './src/hooks/useFitnessData'
+import { useNotifications } from './src/hooks/useNotifications'
 import { useProfile } from './src/hooks/useProfile'
 import { ThemeContext, useThemeProvider } from './src/hooks/useTheme'
+import { useTradingAlerts } from './src/hooks/useTradingAlerts'
 import { useWallpaper } from './src/hooks/useWallpaper'
 
 import AnalyticsDetailScreen from './src/screens/AnalyticsDetailScreen'
@@ -29,17 +33,17 @@ import OnboardingScreen from './src/screens/OnboardingScreen'
 import PremiumScreen from './src/screens/PremiumScreen'
 import SettingsScreen from './src/screens/SettingsScreen'
 import StatsScreen from './src/screens/StatsScreen'
+import TradingScreen from './src/screens/TradingScreen'
 
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
-const RAILWAY_API = 'http://13.51.141.42:3000'
 
 const TABS = [
   { name: 'Home', icon: 'home' },
   { name: 'Coach', icon: 'message-circle' },
+  { name: 'Trading', icon: 'trending-up' },
   { name: 'Study', icon: 'book-open' },
   { name: 'Stats', icon: 'bar-chart-2' },
-  { name: 'Premium', icon: 'star' },
 ]
 
 function TabItem({ route, focused, onPress }) {
@@ -61,9 +65,9 @@ function TabItem({ route, focused, onPress }) {
     >
       {focused && <View style={styles.activeBlob} />}
       <Animated.View style={animStyle}>
-        <Feather name={tab?.icon || 'circle'} size={20} color={focused ? '#fff' : 'rgba(0,0,0,0.55)'} />
+        <Feather name={tab?.icon || 'circle'} size={20} color={focused ? '#1a1a1a' : 'rgba(0,0,0,0.45)'} />
       </Animated.View>
-      <Animated.Text style={[styles.ftabLabel, animStyle, { color: focused ? '#fff' : 'rgba(0,0,0,0.5)', fontWeight: focused ? '600' : '400' }]}>
+      <Animated.Text style={[styles.ftabLabel, animStyle, { color: focused ? '#1a1a1a' : 'rgba(0,0,0,0.45)', fontWeight: focused ? '600' : '400' }]}>
         {route.name}
       </Animated.Text>
     </TouchableOpacity>
@@ -82,8 +86,8 @@ function GlassTabBar({ state, navigation }) {
   return (
     <View style={styles.tabContainer}>
       {glassAvailable 
-        ? <GlassView style={styles.tabWrap} glassEffectStyle='clear' colorScheme='system'>{content}</GlassView>
-        : <View style={[styles.tabWrap, { backgroundColor: 'rgba(255,255,255,0.55)' }]}>{content}</View>
+        ? <GlassView style={styles.tabWrap} glassEffectStyle='regular' colorScheme='light'>{content}</GlassView>
+        : <View style={[styles.tabWrap, { backgroundColor: 'rgba(255,255,255,0.65)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)' }]}>{content}</View>
       }
     </View>
   )
@@ -91,14 +95,24 @@ function GlassTabBar({ state, navigation }) {
 
 function TabNavigator({ data, profile, wallpaper }) {
   return (
-    <Tab.Navigator tabBar={(props) => <GlassTabBar {...props} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: 'transparent'} }}>
-      <Tab.Screen name='Home'>
-        {({ navigation }) => <HomeScreen data={data} profile={profile} wallpaper={wallpaper} onSettingsPress={() => navigation.navigate('Settings')} />}
+    <Tab.Navigator
+      tabBar={(props) => <GlassTabBar {...props} />}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: 'transparent' } }}
+    >
+      <Tab.Screen name='Home' options={{ lazy: false }}>
+        {({ navigation }) => (
+          <HomeScreen
+            data={data}
+            profile={profile}
+            wallpaper={wallpaper}
+            onSettingsPress={() => navigation.navigate('Settings')}
+          />
+        )}
       </Tab.Screen>
-      <Tab.Screen name='Coach'>{() => <CoachScreen data={data} />}</Tab.Screen>
-      <Tab.Screen name='Study'>{() => <StudyScreen />}</Tab.Screen>
-      <Tab.Screen name='Stats'>{({ navigation }) => <StatsScreen data={data} navigation={navigation} />}</Tab.Screen>
-      <Tab.Screen name='Premium'>{() => <PremiumScreen />}</Tab.Screen>
+      <Tab.Screen name='Coach'>{() => <CoachScreen data={data} wallpaper={wallpaper} />}</Tab.Screen>
+      <Tab.Screen name='Trading'>{() => <TradingScreen wallpaper={wallpaper} profile={profile} />}</Tab.Screen>
+      <Tab.Screen name='Study'>{() => <StudyScreen wallpaper={wallpaper} />}</Tab.Screen>
+      <Tab.Screen name='Stats'>{({ navigation }) => <StatsScreen data={data} navigation={navigation} wallpaper={wallpaper} />}</Tab.Screen>
     </Tab.Navigator>
   )
 }
@@ -110,50 +124,22 @@ function App() {
   const wallpaper = useWallpaper()
   const [showOnboarding, setShowOnboarding] = useState(true)
   const [showLogin, setShowLogin] = useState(true)
+  const [waifuSyncKey, setWaifuSyncKey] = useState(0)
 
-  const { steps } = useFitnessData(data.toggleHabit, data.todayHabits)
-
-  useEffect(() => {
-    const syncToRailway = async () => {
-      const userId = await AsyncStorage.getItem('user-id')
-      const token = await AsyncStorage.getItem('auth-token')
-      if (!userId || !token || !data.loaded) return
-
-      try {
-        await fetch(`${RAILWAY_API}/api/sync`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({
-            userId,
-            name: profile?.name || 'User',
-            history: data.history,
-            seenMilestones: data.seenMilestones,
-            steps: steps,
-            sleepHours: 0, 
-            pushToken: null 
-          })
-        })
-        console.log('Sync success:', steps)
-      } catch (e) {
-        console.error('Sync error:', e.message)
-      }
-    }
-
-    if (data.loaded) syncToRailway()
-  }, [steps, data.todayHabits, data.loaded])
+  // Background health sync + auto habit checks (via FitnessProvider)
+  useTradingAlerts(!showLogin)
+  useNotifications(data.missed, data.streak, !showLogin)
 
   useEffect(() => {
     AsyncStorage.getItem('onboarding-done').then(val => { if(val === 'yes') setShowOnboarding(false) })
-    AsyncStorage.getItem('login-type').then(val => { if(val === 'apple' || val == 'google') setShowLogin(false) })
+    AsyncStorage.multiGet(['login-type', 'auth-token']).then(([[, loginType], [, token]]) => {
+      if ((loginType === 'apple' || loginType === 'google' || loginType === 'guest') && (token || loginType === 'guest')) {
+        setShowLogin(false)
+      }
+    })
   }, [])
 
-  if(!data.loaded) return <View style={{ flex: 1, backgroundColor: '#0a0a1a' }} />
-
-  const { currentWallpaper } = wallpaper
-  const wallpaperSource = currentWallpaper?.isLocal ? require('./assets/wallpaper.png') : currentWallpaper?.uri ? { uri: currentWallpaper.uri } : require('./assets/wallpaper.png')
+  if(!data.loaded) return <View style={{ flex: 1, backgroundColor: '#eef4ff' }} />
 
   if(showOnboarding) {
     return (
@@ -163,48 +149,48 @@ function App() {
     )
   }
 
-  if(showLogin) {
-    return (
-      <ThemeContext.Provider value={theme}>
-        <SafeAreaProvider>
-          <StatusBar style='light' />
-          <LoginScreen onLogin={(name) => {
-            AsyncStorage.setItem('user-name', name)
-            profile.reloadProfile()
-            setShowLogin(false)
-          }} />
-        </SafeAreaProvider>
-      </ThemeContext.Provider>
-    )
-  }
-
   return (
     <ThemeContext.Provider value={theme}>
-      <SafeAreaProvider>
-        <StatusBar style='light' />
-        <View style={{ flex: 1, backgroundColor: '#0a0a1a' }}>
-          <Image source={wallpaperSource} style={StyleSheet.absoluteFillObject} resizeMode='cover' />
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.4)' }]} pointerEvents='none' />
-          <NavigationContainer>
-            <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
-              <Stack.Screen name='Tabs'>{() => <TabNavigator data={data} profile={profile} wallpaper={wallpaper} />}</Stack.Screen>
-              <Stack.Screen name='AnalyticsDetail' options={{ gestureEnabled: true, animation: 'slide_from_bottom' }}>
-                {(props) => <AnalyticsDetailScreen {...props} data={data} wallpaper={wallpaper} />}
-              </Stack.Screen>
-              <Stack.Screen name='AwardsList' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
-                {(props) => <AwardsListScreen {...props} />}
-              </Stack.Screen>
-             <Stack.Screen name='Settings' options={{ gestureEnabled: true, animation: 'slide_from_right', contentStyle: { backgroundColor: '#09090b' } }}>
-  {() => <SettingsScreen profile={profile} wallpaper={wallpaper} onLogout={() => setShowLogin(true)} />}
-</Stack.Screen>
-
-              <Stack.Screen name='Fitness' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
-                {() => <FitnessScreen data={data} />}
-              </Stack.Screen>
-            </Stack.Navigator>
-          </NavigationContainer>
-        </View>
-      </SafeAreaProvider>
+      <Live2DProvider>
+        <WaifuStateProvider key={waifuSyncKey}>
+        <SafeAreaProvider>
+          <StatusBar style={showLogin ? 'light' : 'dark'} />
+          <View style={{ flex: 1, backgroundColor: showLogin ? undefined : '#eef4ff' }}>
+            {showLogin ? (
+              <LoginScreen onLogin={(name) => {
+                AsyncStorage.setItem('user-name', name)
+                profile.reloadProfile()
+                setWaifuSyncKey((k) => k + 1)
+                setShowLogin(false)
+              }} />
+            ) : (
+              <FitnessProvider toggleHabit={data.toggleHabit} todayHabits={data.todayHabits}>
+              <NavigationContainer>
+                <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+                  <Stack.Screen name='Tabs'>{() => <TabNavigator data={data} profile={profile} wallpaper={wallpaper} />}</Stack.Screen>
+                  <Stack.Screen name='AnalyticsDetail' options={{ gestureEnabled: true, animation: 'slide_from_bottom' }}>
+                    {(props) => <AnalyticsDetailScreen {...props} data={data} wallpaper={wallpaper} />}
+                  </Stack.Screen>
+                  <Stack.Screen name='AwardsList' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
+                    {(props) => <AwardsListScreen {...props} data={data} wallpaper={wallpaper} />}
+                  </Stack.Screen>
+                  <Stack.Screen name='Settings' options={{ gestureEnabled: true, animation: 'slide_from_right', contentStyle: { backgroundColor: '#eef4ff' } }}>
+                    {() => <SettingsScreen profile={profile} wallpaper={wallpaper} onLogout={() => setShowLogin(true)} />}
+                  </Stack.Screen>
+                  <Stack.Screen name='Fitness' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
+                    {() => <FitnessScreen data={data} />}
+                  </Stack.Screen>
+                  <Stack.Screen name='Premium' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
+                    {(props) => <PremiumScreen {...props} wallpaper={wallpaper} />}
+                  </Stack.Screen>
+                </Stack.Navigator>
+              </NavigationContainer>
+              </FitnessProvider>
+            )}
+          </View>
+        </SafeAreaProvider>
+        </WaifuStateProvider>
+      </Live2DProvider>
     </ThemeContext.Provider>
   )
 }
@@ -214,8 +200,8 @@ const styles = StyleSheet.create({
   tabWrap: { width: '100%', borderRadius: 50, overflow: 'hidden' },
   tabInner: { flexDirection: 'row', paddingVertical: 5, paddingHorizontal: 4 },
   ftab: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 40, gap: 2, position: 'relative' },
-  activeBlob: { position: 'absolute', top: 0, left: 4, right: 4, bottom: 0, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.25)', borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.6)' },
+  activeBlob: { position: 'absolute', top: 0, left: 4, right: 4, bottom: 0, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 0.5, borderColor: 'rgba(255,255,255,1)' },
   ftabLabel: { fontSize: 10, letterSpacing: 0.2, zIndex: 1 },
 })
 
-registerRootComponent(App)
+export default App

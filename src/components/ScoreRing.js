@@ -28,7 +28,7 @@ export default function ScoreRing({ score = 0, size = 160 }) {
         />
       </Svg>
       <Text style={[styles.number, { fontSize: size * 0.25 }]}>{score}</Text>
-      <Text style={[styles.label, { fontSize: size * 0.075 }]}>clarity score</Text>
+      <Text style={[styles.label, { fontSize: size * 0.075 }]}>waifu.ai score</Text>
     </View>
   );
 }

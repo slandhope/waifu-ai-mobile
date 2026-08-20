@@ -6,18 +6,23 @@
     "orientation": "default",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0a0a0f",
+    "assetBundlePatterns": [
+      "assets/live2d/**"
+    ],
     "updates": {
       "url": "https://u.expo.dev/c93d34f9-e72f-47e4-bef2-a4bc6467b5a9"
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "scheme": "waifu",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.slandhope.clarity",
       "infoPlist": {
         "NSHealthShareUsageDescription": "waifu.ai uses Apple Health to auto-track your habits like sleep, steps and exercise.",
         "NSHealthUpdateUsageDescription": "waifu.ai uses Apple Health to auto-track your habits.",
+        "NSMicrophoneUsageDescription": "waifu.ai uses the microphone when you hold the talk button so Asuka can hear and reply to you.",
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
@@ -25,14 +30,23 @@
               "com.googleusercontent.apps.979514312077-9pfv6i8rb2nj63qtfanq155qde3mfisc"
             ]
           }
-        ]
+        ],
+        "NSAppTransportSecurity": {
+          "NSExceptionDomains": {
+            "13.51.141.42": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
       }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0f"
       },
-      "package": "com.slandhope.clarity"
+      "package": "com.slandhope.clarity",
+      "permissions": ["RECORD_AUDIO"]
     },
     "extra": {
       "eas": {
@@ -53,8 +67,7 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.979514312077-9pfv6i8rb2nj63qtfanq155qde3mfisc"
         }
-      ],
-      "expo-audio"
+      ]
     ]
   }
 }

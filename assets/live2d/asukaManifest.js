@@ -1,0 +1,25 @@
+export const ASUKA_ASSETS = {
+  'Scene1.motion3.json': require('./asuka/Scene1.motion3j'),
+  'angry.exp3.json': require('./asuka/angry.exp3j'),
+  'baozhen.exp3.json': require('./asuka/baozhen.exp3j'),
+  'cry.exp3.json': require('./asuka/cry.exp3j'),
+  'haoqi.motion3.json': require('./asuka/haoqi.motion3j'),
+  'huohuo.8192/texture_00.png': require('./asuka/huohuo.8192/texture_00.png'),
+  'huohuo.8192/texture_01.png': require('./asuka/huohuo.8192/texture_01.png'),
+  'huohuo.8192/texture_02.png': require('./asuka/huohuo.8192/texture_02.png'),
+  'huohuo.8192/texture_03.png': require('./asuka/huohuo.8192/texture_03.png'),
+  'huohuo.cdi3.json': require('./asuka/huohuo.cdi3j'),
+  'huohuo.moc3': require('./asuka/huohuo.moc3'),
+  'huohuo.model3.json': require('./asuka/huohuo.model3j'),
+  'huohuo.physics3.json': require('./asuka/huohuo.physics3j'),
+  'keshui.motion3.json': require('./asuka/keshui.motion3j'),
+  'linghun.motion3.json': require('./asuka/linghun.motion3j'),
+  'qizi.motion3.json': require('./asuka/qizi.motion3j'),
+  'qizi1.exp3.json': require('./asuka/qizi1.exp3j'),
+  'qizi2.exp3.json': require('./asuka/qizi2.exp3j'),
+  'white eyes.exp3.json': require('./asuka/white eyes.exp3j'),
+  'yaotou.motion3.json': require('./asuka/yaotou.motion3j'),
+  'zhentou.motion3.json': require('./asuka/zhentou.motion3j'),
+}
+
+export const ASUKA_MODEL_FILE = 'huohuo.model3.json'

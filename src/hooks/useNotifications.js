@@ -1,5 +1,6 @@
 import * as Device from 'expo-device'
 import * as Notifications from 'expo-notifications'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useEffect } from 'react'
 import { Platform } from 'react-native'
 
@@ -85,7 +86,7 @@ export async function sendMissedDayNotification(missed) {
   let msg = ''
 
   if(missed === 1) {
-    msg = 'Your clarity logo is getting sad 😕 come back!'
+    msg = 'Your waifu.ai logo is getting sad 😕 come back!'
   } else if(missed === 2) {
     msg = 'Your logo is crying 😢 please check in today'
   } else {
@@ -94,7 +95,7 @@ export async function sendMissedDayNotification(missed) {
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Clarity misses you...',
+      title: 'waifu.ai misses you...',
       body: msg,
       sound: true,
     },
@@ -104,12 +105,29 @@ export async function sendMissedDayNotification(missed) {
   })
 }
 
-export function useNotifications(missed, streak) {
+export function useNotifications(missed, streak, enabled = true) {
   useEffect(() => {
-    // slight delay so app loads first
-    setTimeout(() => {
-      askPermission()
-      scheduleDailyReminder(20, 0)
-    }, 1000)
-  }, [])
+    if (!enabled) return
+    let cancelled = false
+    ;(async () => {
+      await new Promise((r) => setTimeout(r, 1000))
+      if (cancelled) return
+      const ok = await askPermission()
+      if (!ok) return
+      const raw = await AsyncStorage.getItem('reminder-hour')
+      const hour = Math.min(23, Math.max(0, parseInt(raw || '20', 10) || 20))
+      await scheduleDailyReminder(hour, 0)
+    })()
+    return () => { cancelled = true }
+  }, [enabled])
+
+  useEffect(() => {
+    if (!enabled || missed < 1) return
+    sendMissedDayNotification(missed).catch(() => {})
+  }, [enabled, missed])
+
+  useEffect(() => {
+    if (!enabled || streak < 1 || missed > 0) return
+    // streak warning could fire once per day — kept minimal for now
+  }, [enabled, streak, missed])
 }

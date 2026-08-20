@@ -1,0 +1,27 @@
+export const ALEXIA_ASSETS = {
+  'Alexia.8192/texture_00.png': require('./alexia/Alexia.8192/texture_00.png'),
+  'Alexia.8192/texture_01.png': require('./alexia/Alexia.8192/texture_01.png'),
+  'Alexia.cdi3.json': require('./alexia/Alexia.cdi3j'),
+  'Alexia.moc3': require('./alexia/Alexia.moc3'),
+  'Alexia.model3.json': require('./alexia/Alexia.model3j'),
+  'Alexia.physics3.json': require('./alexia/Alexia.physics3j'),
+  'bbt.exp3.json': require('./alexia/bbt.exp3j'),
+  'dh.motion3.json': require('./alexia/dh.motion3j'),
+  'dyj.exp3.json': require('./alexia/dyj.exp3j'),
+  'h.exp3.json': require('./alexia/h.exp3j'),
+  'k.exp3.json': require('./alexia/k.exp3j'),
+  'lh.exp3.json': require('./alexia/lh.exp3j'),
+  'lzx.exp3.json': require('./alexia/lzx.exp3j'),
+  'mj.exp3.json': require('./alexia/mj.exp3j'),
+  'sq.exp3.json': require('./alexia/sq.exp3j'),
+  'wh.exp3.json': require('./alexia/wh.exp3j'),
+  'xxy.exp3.json': require('./alexia/xxy.exp3j'),
+  'y.exp3.json': require('./alexia/y.exp3j'),
+  'yf.exp3.json': require('./alexia/yf.exp3j'),
+  'yfmz.exp3.json': require('./alexia/yfmz.exp3j'),
+  'yjys1.exp3.json': require('./alexia/yjys1.exp3j'),
+  'yjys2.exp3.json': require('./alexia/yjys2.exp3j'),
+  'zs1.exp3.json': require('./alexia/zs1.exp3j'),
+}
+
+export const ALEXIA_MODEL_FILE = 'Alexia.model3.json'

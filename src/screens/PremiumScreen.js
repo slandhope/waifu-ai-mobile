@@ -1,10 +1,12 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { GlassView } from 'expo-glass-effect';
+import { Feather } from '@expo/vector-icons'
+import { MaterialCommunityIcons } from '@expo/vector-icons'
+import { useNavigation } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import GlassSurface from '../components/GlassSurface';
+import TabScreenShell from '../components/TabScreenShell';
 
 const { width } = Dimensions.get('window');
 
@@ -34,15 +36,16 @@ const FEATURES = [
   { icon: 'headset', text: 'Priority Support', desc: null },
 ];
 
-export default function PremiumScreen() {
+export default function PremiumScreen({ wallpaper }) {
+  const navigation = useNavigation()
   const [selectedPlan, setSelectedPlan] = useState('annual');
   const [loading, setLoading] = useState(false);
 
   const handleSubscribe = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert(
-      '👑 Clarity Pro',
-      'In-app purchases are coming soon! You\'ll be able to subscribe to Clarity Pro directly in the app.\n\nStay tuned!',
+      '👑 waifu.ai Pro',
+      'In-app purchases are coming soon! You\'ll be able to subscribe to waifu.ai Pro directly in the app.\n\nStay tuned!',
       [{ text: 'Got it!', style: 'default' }]
     )
   };
@@ -52,8 +55,10 @@ export default function PremiumScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <SafeAreaView style={styles.safe} edges={['top']}>
+    <TabScreenShell wallpaper={wallpaper}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.85}>
+          <Feather name="chevron-left" size={24} color="#1a1a1a" />
+        </TouchableOpacity>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
           {/* Hero */}
@@ -64,8 +69,8 @@ export default function PremiumScreen() {
             >
               <MaterialCommunityIcons name="crown" size={36} color="#fff" />
             </LinearGradient>
-            <Text style={styles.heroTitle}>Clarity Pro</Text>
-            <Text style={styles.heroSub}>Unlock your full mental clarity potential</Text>
+            <Text style={styles.heroTitle}>waifu.ai Pro</Text>
+            <Text style={styles.heroSub}>Unlock your full potential with waifu.ai</Text>
             <View style={styles.trialBadge}>
               <Text style={styles.trialText}>✦ 7-day free trial</Text>
             </View>
@@ -73,7 +78,7 @@ export default function PremiumScreen() {
 
           {/* Features */}
           <Text style={styles.sectionTitle}>EVERYTHING IN PRO</Text>
-          <GlassView style={styles.featureContainer} glassEffectStyle='regular'>
+          <GlassSurface borderRadius={28} style={styles.featureContainer}>
             {FEATURES.map((feature, i) => (
               <View key={i}>
                 <View style={styles.featureRow}>
@@ -91,7 +96,7 @@ export default function PremiumScreen() {
                 {i < FEATURES.length - 1 && <View style={styles.divider} />}
               </View>
             ))}
-          </GlassView>
+          </GlassSurface>
 
           {/* Plans */}
           <Text style={styles.sectionTitle}>CHOOSE YOUR PLAN</Text>
@@ -104,9 +109,9 @@ export default function PremiumScreen() {
               }}
               activeOpacity={0.9}
             >
-              <GlassView
+              <GlassSurface
+                borderRadius={24}
                 style={[styles.planCard, selectedPlan === plan.id && styles.selectedPlan]}
-                glassEffectStyle='regular'
               >
                 <View style={styles.planInfo}>
                   <Text style={styles.planName}>{plan.name}</Text>
@@ -123,7 +128,7 @@ export default function PremiumScreen() {
                 {selectedPlan === plan.id && (
                   <View style={styles.selectedDot} />
                 )}
-              </GlassView>
+              </GlassSurface>
             </TouchableOpacity>
           ))}
 
@@ -156,41 +161,40 @@ export default function PremiumScreen() {
 
           <View style={{ height: 120 }} />
         </ScrollView>
-      </SafeAreaView>
-    </View>
+    </TabScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
   content: { padding: 20 },
+  backBtn: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4, alignSelf: 'flex-start' },
   hero: { alignItems: 'center', marginVertical: 30 },
   crownCircle: { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  heroTitle: { fontSize: 36, fontWeight: '900', color: '#f6ad55', textAlign: 'center', marginBottom: 8 },
-  heroSub: { color: 'rgba(255,255,255,0.7)', fontSize: 16, textAlign: 'center', marginBottom: 16 },
-  trialBadge: { backgroundColor: 'rgba(246,173,85,0.15)', borderWidth: 1, borderColor: 'rgba(246,173,85,0.3)', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
-  trialText: { color: '#f6ad55', fontSize: 14, fontWeight: '700' },
-  sectionTitle: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '800', letterSpacing: 1.5, marginBottom: 15, marginTop: 25 },
-  featureContainer: { borderRadius: 28, overflow: 'hidden' },
+  heroTitle: { fontSize: 36, fontWeight: '900', color: '#e08b2a', textAlign: 'center', marginBottom: 8 },
+  heroSub: { color: 'rgba(0,0,0,0.55)', fontSize: 16, textAlign: 'center', marginBottom: 16 },
+  trialBadge: { backgroundColor: 'rgba(246,173,85,0.15)', borderWidth: 1, borderColor: 'rgba(246,173,85,0.35)', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
+  trialText: { color: '#e08b2a', fontSize: 14, fontWeight: '700' },
+  sectionTitle: { color: 'rgba(0,0,0,0.4)', fontSize: 12, fontWeight: '800', letterSpacing: 1.5, marginBottom: 15, marginTop: 25 },
+  featureContainer: { overflow: 'hidden' },
   featureRow: { flexDirection: 'row', alignItems: 'center', padding: 18, gap: 14 },
-  featureIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(246,173,85,0.1)', alignItems: 'center', justifyContent: 'center' },
-  featureText: { color: '#fff', fontSize: 15, fontWeight: '600', flex: 1 },
-  featureDesc: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 3 },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginLeft: 68 },
-  planCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 22, borderRadius: 24, marginBottom: 12, overflow: 'hidden' },
+  featureIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(246,173,85,0.12)', alignItems: 'center', justifyContent: 'center' },
+  featureText: { color: '#1a1a1a', fontSize: 15, fontWeight: '600', flex: 1 },
+  featureDesc: { color: 'rgba(0,0,0,0.45)', fontSize: 12, marginTop: 3 },
+  divider: { height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginLeft: 68 },
+  planCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 22, marginBottom: 12, overflow: 'hidden' },
   selectedPlan: { borderWidth: 2, borderColor: '#f6ad55' },
   planInfo: { flex: 1 },
-  planName: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  planSub: { color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 4 },
+  planName: { color: '#1a1a1a', fontSize: 20, fontWeight: '800' },
+  planSub: { color: 'rgba(0,0,0,0.45)', fontSize: 13, marginTop: 4 },
   planPriceGroup: { alignItems: 'flex-end' },
-  planPrice: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  planPrice: { color: '#1a1a1a', fontSize: 20, fontWeight: '800' },
   saveBadge: { backgroundColor: 'rgba(72,187,120,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 6 },
-  saveBadgeText: { color: '#48bb78', fontSize: 12, fontWeight: '900' },
+  saveBadgeText: { color: '#16a34a', fontSize: 12, fontWeight: '900' },
   selectedDot: { position: 'absolute', top: 12, right: 12, width: 10, height: 10, borderRadius: 5, backgroundColor: '#f6ad55' },
   ctaWrapper: { marginTop: 10, borderRadius: 25, overflow: 'hidden' },
   ctaBtn: { paddingVertical: 20, alignItems: 'center' },
   ctaText: { color: '#fff', fontSize: 19, fontWeight: '900' },
   restoreBtn: { alignItems: 'center', marginTop: 16 },
-  restoreText: { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
-  legalText: { color: 'rgba(255,255,255,0.25)', fontSize: 11, textAlign: 'center', lineHeight: 16, marginTop: 20 },
+  restoreText: { color: 'rgba(0,0,0,0.45)', fontSize: 14 },
+  legalText: { color: 'rgba(0,0,0,0.35)', fontSize: 11, textAlign: 'center', lineHeight: 16, marginTop: 20 },
 });

@@ -16,7 +16,15 @@ export const COLORS = {
 };
 
 export const MILESTONES = [3, 7, 14, 30, 50, 100];
-export const todayKey = () => new Date().toISOString().split("T")[0];
+export const localDateKey = (date = new Date()) => {
+  const d = date instanceof Date ? date : new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const todayKey = () => localDateKey(new Date());
 
 export const calcScore = (checkedIds) => {
   const total = HABITS.reduce((s, h) => s + h.pts, 0);
@@ -28,7 +36,7 @@ export const calcStreak = (history) => {
   let s = 0;
   const d = new Date();
   while (true) {
-    const key = d.toISOString().split("T")[0];
+    const key = localDateKey(d);
     if ((history[key] || []).length >= Math.ceil(HABITS.length / 2)) { s++; d.setDate(d.getDate() - 1); }
     else break;
   }
@@ -39,7 +47,7 @@ export const missedDays = (history) => {
   let missed = 0;
   const d = new Date();
   while (missed < 10) {
-    const key = d.toISOString().split("T")[0];
+    const key = localDateKey(d);
     if ((history[key] || []).length >= Math.ceil(HABITS.length / 2)) break;
     missed++;
     d.setDate(d.getDate() - 1);

@@ -1,85 +1,205 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react'
-import { View, StyleSheet } from 'react-native'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { WebView } from 'react-native-webview'
+import { useLive2D } from '../context/Live2DContext'
+import { resolveLive2DBundle } from '../lib/localLive2d'
 
-const MODEL_URL =
-  'https://cdn.jsdelivr.net/gh/slandhope/asuka-model@main/asuka/huohuo.model3.json'
+const LOAD_TIMEOUT_MS = 180000
+const INJECT_CHUNK = 80000
 
-const live2dHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden;}#c{width:100%;height:100%;display:block;}</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-  var say=function(m){try{window.ReactNativeWebView.postMessage(String(m));}catch(e){}};
-  function load(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('script failed: '+src));};document.head.appendChild(s);});}
-  window.__mouth = 0;
-  (async function(){
-    try{
-      await load("https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js");
-      await load("https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js");
-      await load("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js");
-      var app=new PIXI.Application({view:document.getElementById("c"),autoStart:true,resizeTo:window,backgroundAlpha:0,antialias:true});
-      var model=await PIXI.live2d.Live2DModel.from(${JSON.stringify(MODEL_URL)});
-      window.__model=model; app.stage.addChild(model);
-      var baseW=model.width, baseH=model.height;
-      var fit=function(){ var s=window.innerHeight/baseH; model.scale.set(s); model.x=(window.innerWidth-model.width)/2; model.y=0; };
-      fit(); window.addEventListener("resize",fit);
-      model.on("hit",function(){ model.motion("Tap"); });
-      // drive mouth AFTER the model's own update each frame
-      PIXI.Ticker.shared.add(function(){ try{ model.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', window.__mouth||0);}catch(e){} }, null, PIXI.UPDATE_PRIORITY.LOW);
-      say("LIVE2D_OK");
-    }catch(e){ say("ERR: "+(e&&e.message?e.message:e)); }
-  })();
+const WAKE_LINES = [
+  (name) => `${name} is waking up~`,
+  (name) => `Your waifu is coming…`,
+  (name) => `${name} is getting ready for you`,
+  (name) => `Hold on — ${name} is on her way`,
+  () => `Waifu loading…`,
+]
 
-  // Play ElevenLabs audio + lip-sync from its amplitude
-  window.__speak=function(dataUrl){
-    try{
-      var AC=window.AudioContext||window.webkitAudioContext;
-      window.__ctx=window.__ctx||new AC();
-      var ctx=window.__ctx; if(ctx.resume) ctx.resume();
-      var audio=new Audio(); audio.src=dataUrl; audio.crossOrigin='anonymous';
-      var srcNode=ctx.createMediaElementSource(audio);
-      var analyser=ctx.createAnalyser(); analyser.fftSize=256;
-      srcNode.connect(analyser); analyser.connect(ctx.destination);
-      var data=new Uint8Array(analyser.frequencyBinCount);
-      audio.onplay=function(){ (function loop(){ if(audio.paused||audio.ended){window.__mouth=0;return;} analyser.getByteFrequencyData(data); var s=0; for(var i=0;i<data.length;i++) s+=data[i]; window.__mouth=Math.max(0,Math.min(1,(s/data.length)/70)); requestAnimationFrame(loop); })(); };
-      audio.onended=function(){ window.__mouth=0; };
-      var p=audio.play(); if(p&&p.catch) p.catch(function(e){ say('PLAY_BLOCKED: '+e.message); });
-    }catch(e){ say('SPEAK_ERR: '+(e&&e.message?e.message:e)); }
-  };
-</script>
-</body>
-</html>
-`
+function WakeUpHint({ name }) {
+  const [idx, setIdx] = useState(0)
+  const displayName = name || 'She'
+
+  useEffect(() => {
+    const id = setInterval(() => setIdx((i) => (i + 1) % WAKE_LINES.length), 3200)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <View style={styles.hintWrap} pointerEvents="none">
+      <Text style={styles.hintEmoji}>{displayName === 'She' ? '✨' : '💤'}</Text>
+      <Text style={styles.hintText}>{WAKE_LINES[idx](displayName)}</Text>
+    </View>
+  )
+}
+
+async function injectJs(webRef, js) {
+  return new Promise((resolve) => {
+    webRef.current?.injectJavaScript(`${js}; true;`)
+    setTimeout(resolve, 8)
+  })
+}
+
+async function injectVfAndBoot(webRef, vfB64) {
+  await injectJs(webRef, 'window.__VF_B64=""')
+  for (let i = 0; i < vfB64.length; i += INJECT_CHUNK) {
+    const part = JSON.stringify(vfB64.slice(i, i + INJECT_CHUNK))
+    await injectJs(webRef, `window.__VF_B64+=${part}`)
+  }
+  await injectJs(webRef, 'window.startBoot&&window.startBoot()')
+}
 
 const AsukaLive2D = forwardRef(function AsukaLive2D({ style }, ref) {
+  const { character, characterLoaded } = useLive2D()
   const webRef = useRef(null)
+  const bootedRef = useRef(false)
+  const [ready, setReady] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  const [bundle, setBundle] = useState(null)
+  const [retryKey, setRetryKey] = useState(0)
+  const readyRef = useRef(false)
+  const timeoutRef = useRef(null)
+
+  useEffect(() => {
+    if (!characterLoaded) return undefined
+
+    let cancelled = false
+    readyRef.current = false
+    bootedRef.current = false
+    setReady(false)
+    setLoadError(null)
+    setBundle(null)
+
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
+      if (!cancelled && !readyRef.current) {
+        setLoadError('Timed out — tap retry.')
+      }
+    }, LOAD_TIMEOUT_MS)
+
+    ;(async () => {
+      try {
+        const resolved = await resolveLive2DBundle(character)
+        if (cancelled) return
+        setBundle(resolved)
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(e.message || 'Could not load character')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [characterLoaded, character.id, character.scale, character.name, retryKey])
+
   useImperativeHandle(ref, () => ({
     speak(dataUrl) {
       webRef.current?.injectJavaScript('window.__speak(' + JSON.stringify(dataUrl) + '); true;')
     },
+    setExpression(exprId) {
+      if (!exprId) return
+      webRef.current?.injectJavaScript(
+        `try{if(window.__model&&window.__model.expression){window.__model.expression(${JSON.stringify(exprId)});}}catch(e){}; true;`
+      )
+    },
+    applyEquipped(equipped, characterId) {
+      if (!equipped) return
+      const cats = ['outfit', 'hair', 'accessory']
+      const ids = cats.map((c) => equipped[c]).filter(Boolean)
+      if (!ids.length) return
+      webRef.current?.injectJavaScript(
+        `try{var ids=${JSON.stringify(ids)};if(window.__model&&window.__model.expression){ids.forEach(function(id){try{window.__model.expression(id);}catch(e){}});}}catch(e){}; true;`
+      )
+    },
   }))
+
+  const retry = () => {
+    setLoadError(null)
+    setReady(false)
+    setBundle(null)
+    setRetryKey((k) => k + 1)
+  }
+
+  const onWebReady = async () => {
+    if (!bundle?.useInject || !bundle.vfB64 || bootedRef.current) return
+    bootedRef.current = true
+    try {
+      await injectVfAndBoot(webRef, bundle.vfB64)
+    } catch (e) {
+      setLoadError(e.message || 'Could not load character data')
+    }
+  }
+
+  if (!characterLoaded || !bundle) {
+    return (
+      <View style={[styles.wrap, style]}>
+        {!loadError && <WakeUpHint name={character?.name} />}
+        {loadError && (
+          <View style={styles.errorWrap}>
+            <Text style={styles.errText}>{loadError}</Text>
+            <TouchableOpacity onPress={retry} style={styles.retryBtn} activeOpacity={0.85}>
+              <Text style={styles.retryText}>Tap to retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    )
+  }
+
   return (
-    <View style={[styles.wrap, style]} pointerEvents="box-none">
+    <View style={[styles.wrap, style]}>
+      {!ready && !loadError && <WakeUpHint name={character.name} />}
+      {loadError && (
+        <View style={styles.errorWrap}>
+          <Text style={styles.errText}>{loadError}</Text>
+          <TouchableOpacity onPress={retry} style={styles.retryBtn} activeOpacity={0.85}>
+            <Text style={styles.retryText}>Tap to retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <WebView
+        key={`${character.id}-${retryKey}`}
         ref={webRef}
         originWhitelist={['*']}
-        source={{ html: live2dHtml }}
-        style={styles.web}
-        containerStyle={styles.web}
+        source={{ uri: `${bundle.source.uri}?t=${retryKey}` }}
+        style={[styles.web, !ready && styles.webHidden]}
         scrollEnabled={false}
         javaScriptEnabled
         domStorageEnabled
+        cacheEnabled={false}
         mixedContentMode="always"
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         backgroundColor="transparent"
-        onMessage={(e) => { const d = String(e.nativeEvent.data); if (d.startsWith('ERR') || d.includes('BLOCK') || d.includes('SPEAK')) console.log('[AsukaLive2D]', d) }}
+        allowingReadAccessToURL={
+          Platform.OS === 'ios' ? bundle.readAccessDir : undefined
+        }
+        {...(Platform.OS === 'android'
+          ? { allowingUniversalAccessFromFileURLs: true, allowFileAccess: true }
+          : {})}
+        onError={(e) => {
+          setLoadError('WebView error — tap retry.')
+          console.log('[AsukaLive2D] webview error', e.nativeEvent)
+        }}
+        onMessage={(e) => {
+          const d = String(e.nativeEvent.data)
+          if (d === 'READY') {
+            onWebReady()
+            return
+          }
+          if (d === 'LIVE2D_OK') {
+            readyRef.current = true
+            if (timeoutRef.current) clearTimeout(timeoutRef.current)
+            setLoadError(null)
+            setReady(true)
+          } else if (d.startsWith('ERR')) {
+            setReady(false)
+            setLoadError(d.replace(/^ERR:\s*/, ''))
+            console.log('[AsukaLive2D]', d)
+          }
+        }}
       />
     </View>
   )
@@ -88,6 +208,37 @@ const AsukaLive2D = forwardRef(function AsukaLive2D({ style }, ref) {
 export default AsukaLive2D
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: 'transparent' },
+  wrap: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
   web: { flex: 1, backgroundColor: 'transparent' },
+  webHidden: { opacity: 0 },
+  hintWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    zIndex: 2,
+  },
+  hintEmoji: { fontSize: 28, marginBottom: 10, opacity: 0.85 },
+  hintText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.45)',
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  errorWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    paddingHorizontal: 28,
+  },
+  errText: { fontSize: 13, color: 'rgba(0,0,0,0.65)', marginBottom: 10, textAlign: 'center', fontWeight: '600' },
+  retryBtn: {
+    backgroundColor: 'rgba(108,92,231,0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryText: { fontSize: 14, fontWeight: '600', color: '#6c5ce7' },
 })

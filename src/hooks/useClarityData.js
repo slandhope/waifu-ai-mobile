@@ -1,8 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Notifications from 'expo-notifications';
 import { useEffect, useState } from "react";
 import { calcStreak, missedDays, todayKey } from "../constants";
-import { apiCall, login } from "../utils/api";
+import { mergeCoachFromServer, goalsToCloudPayload, loadDailyGoals } from "../lib/aiGoalsStore";
+import { pullStudyFromCloud } from "../lib/studySync";
+import { apiCall, fetchMe } from "../utils/api";
+import { isExpoGo } from "../utils/isExpoGo";
 
 const STORAGE_KEY = "clarity-data-v1";
 
@@ -17,8 +19,6 @@ export function useClarityData() {
   useEffect(() => {
     (async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 100))
-
         let uid = await AsyncStorage.getItem('user-id')
         if(!uid) {
           uid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -29,48 +29,6 @@ export function useClarityData() {
           await AsyncStorage.setItem('user-id', uid)
         }
         setUserId(uid)
-
-        // get JWT token if we don't have one
-        const existingToken = await AsyncStorage.getItem('auth-token')
-        if(!existingToken) {
-          const userName = await AsyncStorage.getItem('user-name') || 'User'
-          const loginType = await AsyncStorage.getItem('login-type') || 'apple'
-          await login(uid, userName, loginType)
-        }
-
-        // register push token
-        try {
-          const { status } = await Notifications.requestPermissionsAsync()
-          if(status === 'granted') {
-            const token = (await Notifications.getExpoPushTokenAsync({
-              projectId: 'c93d34f9-e72f-47e4-bef2-a4bc6467b5a9'
-            })).data
-            await AsyncStorage.setItem('push-token', token)
-            console.log('Push token:', token)
-          }
-        } catch(e) {
-          console.log('Push token error:', e.message)
-        }
-
-        // load from server
-        try {
-          const res = await apiCall('/api/sync/' + uid)
-          const serverData = await res.json()
-          if(serverData.exists) {
-            setHistory(serverData.history || {})
-            setSeenMilestones(serverData.seenMilestones || [])
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
-              history: serverData.history || {},
-              messages: [],
-              weeklyInsight: null,
-              seenMilestones: serverData.seenMilestones || []
-            }))
-            setLoaded(true)
-            return
-          }
-        } catch(e) {
-          console.log('server load failed, using local:', e.message)
-        }
 
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if(raw) {
@@ -84,6 +42,60 @@ export function useClarityData() {
         console.log('load error:', e)
       }
       setLoaded(true);
+
+      // Background: push token + server sync (don't block home UI)
+      try {
+        if (!isExpoGo()) {
+          try {
+            const Notifications = await import('expo-notifications')
+            const { status } = await Notifications.requestPermissionsAsync()
+            if(status === 'granted') {
+              const token = (await Notifications.getExpoPushTokenAsync({
+                projectId: 'c93d34f9-e72f-47e4-bef2-a4bc6467b5a9'
+              })).data
+              await AsyncStorage.setItem('push-token', token)
+              console.log('Push token:', token)
+            }
+          } catch(e) {
+            console.log('Push token error:', e.message)
+          }
+        }
+
+        const uid = await AsyncStorage.getItem('user-id')
+        const token = await AsyncStorage.getItem('auth-token')
+        let serverData = null
+        if (token) {
+          serverData = await fetchMe()
+          if (serverData) {
+            await mergeCoachFromServer(serverData)
+            pullStudyFromCloud().catch(() => {})
+          }
+        }
+        if (serverData?.exists || serverData?.history) {
+          const localRaw = await AsyncStorage.getItem(STORAGE_KEY)
+          const localData = localRaw ? JSON.parse(localRaw) : {}
+          const localHistory = localData.history || {}
+          const mergedHistory = { ...localHistory }
+          for (const [day, habits] of Object.entries(serverData.history || {})) {
+            const localDay = mergedHistory[day] || []
+            mergedHistory[day] = [...new Set([...localDay, ...(habits || [])])]
+          }
+          const mergedMilestones = [...new Set([
+            ...(localData.seenMilestones || []),
+            ...(serverData.seenMilestones || []),
+          ])]
+          setHistory(mergedHistory)
+          setSeenMilestones(mergedMilestones)
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
+            history: mergedHistory,
+            messages: localData.messages || [],
+            weeklyInsight: localData.weeklyInsight || null,
+            seenMilestones: mergedMilestones,
+          }))
+        }
+      } catch(e) {
+        console.log('background sync failed:', e.message)
+      }
     })();
   }, []);
 
@@ -101,9 +113,13 @@ export function useClarityData() {
       try {
         const name = await AsyncStorage.getItem('user-name') || 'User'
         const pushToken = await AsyncStorage.getItem('push-token')
+        const coach = goalsToCloudPayload(await loadDailyGoals())
         await apiCall('/api/sync', {
           method: 'POST',
-          body: JSON.stringify({ userId, name, history, seenMilestones, pushToken })
+          body: JSON.stringify({
+            userId, name, history, seenMilestones, pushToken,
+            ...(coach || {}),
+          })
         })
         console.log('synced to server!')
       } catch(e) {
@@ -111,7 +127,7 @@ export function useClarityData() {
       }
     }
     syncToServer()
-  }, [history, seenMilestones])
+  }, [history, seenMilestones, loaded, userId])
 
   const today = todayKey();
   const todayHabits = history[today] || [];

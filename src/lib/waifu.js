@@ -1,4 +1,9 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { GROQ_API_KEY, ELEVENLABS_API_KEY, VOICE_ID } from '../secrets'
+import { apiCall } from '../utils/api'
+
+// Groq retired llama-3.3-70b-versatile on 2026-08-16 — chat goes through AWS like PC
+const GROQ_VISION_MODEL = 'llama-3.2-90b-vision-preview'
 
 // ── Personality map — ported from the PC build ──
 const PERSONAS = {
@@ -9,6 +14,9 @@ const PERSONAS = {
 }
 let personality = 'chill'
 let tutorMode = false
+
+export function getTutorMode() { return tutorMode }
+export function setTutorMode(on) { tutorMode = !!on }
 
 const SWITCHES = [
   { re: /mommy (mode|voice)|be my mommy|mommy asuka/i, key: 'mommy',   reply: "Okay sweetheart~ mommy's here now. Take a breath, I've got you. 💗" },
@@ -21,20 +29,22 @@ export function trySwitch(text) {
   return null
 }
 
-// ── Groq brain helpers ──
+// ── Brain via AWS backend (same as PC + Coach tab) ──
 async function brainRaw(system, user, temp = 0.5, max = 500) {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const userId = await AsyncStorage.getItem('user-id')
+  const res = await apiCall('/api/chat', {
     method: 'POST',
-    headers: { Authorization: 'Bearer ' + GROQ_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user || ' ' }],
-      temperature: temp, max_tokens: max,
+      system,
+      messages: [{ role: 'user', content: user || ' ' }],
+      userId,
+      temperature: temp,
+      max_tokens: max,
     }),
   })
   const j = await res.json()
-  if (!res.ok) throw new Error(j?.error?.message || 'brain failed')
-  return (j.choices?.[0]?.message?.content || '').trim()
+  if (!res.ok) throw new Error(j?.error?.message || j?.message || 'brain failed')
+  return (j.content?.[0]?.text || j.choices?.[0]?.message?.content || '').trim()
 }
 async function brainJSON(system, user) {
   let t = await brainRaw(system + ' Return ONLY valid JSON, no prose, no code fences.', user, 0.3, 700)
@@ -81,22 +91,47 @@ export async function handleTeaching(history, text) {
 }
 async function brainText(system, user) { return brainRaw(system, user, 0.7, 700) }
 
-// ── Normal chat reply ──
-export async function getReply(history, userText) {
+// ── Normal chat reply (AWS — same path as PC) ──
+export async function getReply(history, userText, contextBlock = '') {
   const tutor = tutorMode && !/just tell me/i.test(userText) ? TUTOR_RULES : ''
   const system =
     "You are Asuka, the user's anime waifu companion on their phone. " +
     PERSONAS[personality] + tutor +
-    ' Keep replies short and natural — 1 to 3 sentences, spoken out loud. Never say you are an AI.'
-  const messages = [{ role: 'system', content: system }, ...history, { role: 'user', content: userText }]
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    ' Keep replies short and natural — 1 to 3 sentences, spoken out loud. Never say you are an AI.' +
+    (contextBlock ? '\n\n' + contextBlock : '')
+  const messages = [...history, { role: 'user', content: userText }]
+  const userId = await AsyncStorage.getItem('user-id')
+  const res = await apiCall('/api/chat', {
     method: 'POST',
-    headers: { Authorization: 'Bearer ' + GROQ_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, temperature: 0.85, max_tokens: 150 }),
+    body: JSON.stringify({
+      system,
+      messages: messages.slice(-20),
+      userId,
+      temperature: 0.85,
+      max_tokens: 150,
+    }),
   })
   const j = await res.json()
-  if (!res.ok) throw new Error(j?.error?.message || 'brain failed')
-  return (j.choices?.[0]?.message?.content || '...').trim()
+  if (!res.ok) throw new Error(j?.error?.message || j?.message || 'brain failed')
+  return (j.content?.[0]?.text || j.choices?.[0]?.message?.content || '...').trim()
+}
+
+export async function transcribe(audioUri) {
+  const form = new FormData()
+  form.append('file', {
+    uri: audioUri,
+    type: 'audio/m4a',
+    name: 'speech.m4a',
+  })
+  form.append('model', 'whisper-large-v3-turbo')
+  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + GROQ_API_KEY },
+    body: form,
+  })
+  const j = await res.json()
+  if (!res.ok) throw new Error(j?.error?.message || 'transcription failed')
+  return (j.text || '').trim()
 }
 
 // ── Voice (matches PC: eleven_flash_v2_5, mp3_22050_32) ──
@@ -123,11 +158,88 @@ export async function synthesize(text) {
 }
 
 // ── Step-by-step chalkboard lesson (classroom) ──
-export async function buildLesson(topic) {
+export async function buildLesson(topic, opts = {}) {
+  const { text = '', style = 'direct' } = opts
+  const tutor = style === 'tutor'
+    ? ' TUTOR MODE: guide with hints and questions — do NOT give the full answer on the first step.'
+    : ''
+  const material = text
+    ? `\n\nStudy material:\n${String(text).slice(0, 12000)}`
+    : ''
   const j = await brainJSON(
-    'You are Asuka teaching on a chalkboard, step by step, warm and encouraging.',
-    'Teach "' + topic + '" as a short lesson. Return JSON: {"title":"SHORT TITLE","steps":[{"board":"concise board notes or formula for this step, max 6 short lines separated by \\n","say":"what you say out loud, 1-2 warm sentences"}]}. Make 4 to 6 steps, easy to hard.'
+    'You are Asuka teaching on a chalkboard, step by step, warm and encouraging.' + tutor,
+    'Teach "' + topic + '" as a short lesson.' + material +
+    ' Return JSON: {"title":"SHORT TITLE","steps":[{"boardTitle":"step label","board":"concise board notes, max 6 short lines separated by \\n","say":"what you say out loud, 1-2 warm sentences"}]}. Make 4 to 8 steps, easy to hard.'
   )
   if (!j || !Array.isArray(j.steps) || !j.steps.length) return null
   return j
+}
+
+export async function checkWork(text) {
+  const j = await brainJSON(
+    'You are Asuka checking a student\'s work. Find real mistakes only.',
+    'Check this work. Return JSON: {"overall":"one warm sentence","issues":[{"where":"which part","wrong":"what is wrong","fix":"the correction"}]} — empty issues if all correct.\n\n' + String(text).slice(0, 10000)
+  )
+  return j || { overall: 'Could not check that — try again?', issues: [] }
+}
+
+export async function solvePhoto(base64, mediaType = 'image/jpeg') {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + GROQ_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: GROQ_VISION_MODEL,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'You are Asuka, a warm anime teacher. Read the problem(s) in the image and teach the solution step by step with 6-10 steps. Reply ONLY JSON: {"beats":[{"say":"1-2 sentences","boardTitle":"short","board":"working on the board"}]}',
+          },
+          { type: 'image_url', image_url: { url: 'data:' + mediaType + ';base64,' + base64 } },
+        ],
+      }],
+      temperature: 0.4,
+      max_tokens: 3000,
+    }),
+  })
+  const j = await res.json()
+  if (!res.ok) throw new Error(j?.error?.message || 'vision failed')
+  let t = (j.choices?.[0]?.message?.content || '').trim().replace(/```json|```/g, '').trim()
+  try {
+    const parsed = JSON.parse(t)
+    return parsed.beats || []
+  } catch {
+    const m = t.match(/\{[\s\S]*\}/)
+    if (m) {
+      const parsed = JSON.parse(m[0])
+      return parsed.beats || []
+    }
+    throw new Error('could not parse lesson from photo')
+  }
+}
+
+export async function buildQuiz(topic, steps) {
+  const content = (steps || []).map((s) => (s.say || '') + ' ' + (s.board || '')).join(' ').slice(0, 8000)
+  const j = await brainJSON(
+    'Create a 5-question multiple-choice quiz from the lesson. Each question: 3 options, one correct (correct = index 0-2). Reply ONLY JSON: {"questions":[{"q":"...","options":["a","b","c"],"correct":0}]}',
+    'Lesson topic: ' + topic + '\n\n' + content
+  )
+  return j?.questions || []
+}
+
+export async function lessonToCards(topic, content) {
+  const j = await brainJSON(
+    'Create flashcards from lesson content.',
+    'From this lesson on "' + topic + '", create 5-10 flashcards. Return JSON: {"cards":[{"q":"question","a":"short answer"}]}\n\n' + content
+  )
+  return j?.cards || []
+}
+
+export async function classroomAsk(recentSteps, question) {
+  const ctx = (recentSteps || []).map((s, i) => 'Step ' + (i + 1) + ': ' + (s.say || '') + '\n' + (s.board || '')).join('\n\n')
+  return brainText(
+    'You are Asuka mid-lesson. Answer briefly using only the lesson context. Warm and clear.',
+    'Lesson so far:\n' + ctx + '\n\nStudent asks: ' + question
+  )
 }

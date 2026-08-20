@@ -1,5 +1,3 @@
-const RAILWAY_URL = 'http://13.51.141.42:3000'
-
 export const WALLPAPERS = [
   {
     id: 'none',
@@ -10,7 +8,7 @@ export const WALLPAPERS = [
   },
   {
     id: 'default',
-    name: 'Clarity',
+    name: 'waifu.ai',
     isPro: false,
     uri: null,
     thumb: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200',

@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useFitnessData } from '../hooks/useFitnessData'
+import { useFitness } from '../context/FitnessContext'
 import { useTheme } from '../hooks/useTheme'
 
 const IOS_SOURCES = [
@@ -33,10 +33,7 @@ const AUTO_HABITS = [
 export default function FitnessScreen({ data }) {
   const { colors, accent } = useTheme()
   const navigation = useNavigation()
-  const { connected, steps, sleepHours, activeMinutes, connectFitness, fetchData } = useFitnessData(
-    data?.toggleHabit,
-    data?.todayHabits || []
-  )
+  const { connected, steps, sleepHours, activeMinutes, connectFitness, fetchData } = useFitness()
 
   const sources = Platform.OS === 'ios' ? IOS_SOURCES : ANDROID_SOURCES
   const primarySource = Platform.OS === 'ios' ? 'Apple Health' : 'Google Fit'
@@ -72,9 +69,13 @@ export default function FitnessScreen({ data }) {
           <View style={[styles.infoBanner, { backgroundColor: accent.glow, borderColor: accent.primary + '40' }]}>
             <Text style={styles.infoIcon}>✨</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.infoTitle, { color: accent.primary }]}>Auto-track your habits</Text>
+              <Text style={[styles.infoTitle, { color: accent.primary }]}>
+                {Platform.OS === 'ios' ? 'Auto-track your habits' : 'Apple Health on iOS only'}
+              </Text>
               <Text style={[styles.infoSub, { color: colors.textMuted }]}>
-                Connect your fitness app and Clarity will automatically check off habits based on your real activity data
+                {Platform.OS === 'ios'
+                  ? 'Connect your fitness app and waifu.ai will automatically check off habits based on your real activity data'
+                  : 'Health auto-tracking requires a custom iOS build. Android Health Connect support is coming later.'}
               </Text>
             </View>
           </View>

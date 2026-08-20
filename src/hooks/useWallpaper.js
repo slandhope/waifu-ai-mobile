@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react'
 import { WALLPAPERS } from '../constants/wallpapers'
 
 export function useWallpaper() {
-  const [wallpaperId, setWallpaperId] = useState('none')
+  const [wallpaperId, setWallpaperId] = useState('default')
 
   useEffect(() => {
     AsyncStorage.getItem('wallpaper-id').then(val => {
-      if(val) setWallpaperId(val)
+      if (val) setWallpaperId(val)
     })
   }, [])
 
