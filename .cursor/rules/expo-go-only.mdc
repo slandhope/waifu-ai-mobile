@@ -1,0 +1,33 @@
+---
+description: User cannot run native builds — Expo Go only for development
+alwaysApply: true
+---
+
+# Expo Go only (no dev builds)
+
+The user **cannot run `expo run:ios` / EAS builds right now**. All work must run in **Expo Go**.
+
+## Do
+
+- Prefer **JS-only** solutions and Expo Go–supported APIs (`expo-av`, `expo-image-picker`, etc.).
+- **Lazy-import** custom native modules (`@kingstinct/react-native-healthkit`, `@react-native-google-signin/google-signin`, `react-native-nitro-modules`) — never top-level import in files loaded at startup.
+- Guard native features with `isExpoGo()` from `src/utils/isExpoGo.js` and show a clear message or guest/skip fallback.
+- Skip push token registration in Expo Go (`useClarityData`).
+
+## Do not
+
+- Add new native modules or `app.json` plugins that require a rebuild.
+- Tell the user to run a dev build as the only fix — offer Expo Go–compatible alternatives first.
+- Import HealthKit, Google Sign-In, or Nitro packages at module scope in `App.js` or hooks used on launch.
+
+## Expo Go limitations (graceful degradation)
+
+| Feature | In Expo Go |
+|---------|------------|
+| Apple Health / steps | Disabled — stub data |
+| Google Sign-In | Disabled — use "Continue as guest" |
+| Push notifications | Skipped |
+| Live2D models (Asuka + Alexia) | Bundled on phone (~37MB total) |
+| Chat / brain / sync | AWS `http://13.51.141.42:3000` |
+
+Backend: `http://13.51.141.42:3000` — do not change.
