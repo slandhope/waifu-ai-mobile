@@ -1,50 +1,63 @@
-# Welcome to your Expo app 👋
+# waifu.ai — mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Expo app for iOS/Android. Companion chat, habits, study, trading, and wellness — synced with the PC app via the shared AWS backend.
 
-## Get started
+**Repo:** [github.com/slandhope/waifu-ai-mobile](https://github.com/slandhope/waifu-ai-mobile)  
+**PC / server repo:** [github.com/slandhope/crypto-ai-desktop](https://github.com/slandhope/crypto-ai-desktop)
 
-1. Install dependencies
+## Architecture
 
-   ```bash
-   npm install
-   ```
+| Layer | Where |
+|-------|--------|
+| This repo | Phone UI (Expo / React Native) |
+| [crypto-ai-desktop](https://github.com/slandhope/crypto-ai-desktop) | Electron desktop + `scanner-server.js` on AWS |
+| AWS API | `http://13.51.141.42:3000` (see `src/constants/index.js`) |
+| Auth | Google / Apple ID token → same Cognito user on PC + phone |
 
-2. Start the app
+When logged in with the same account, these sync automatically:
 
-   ```bash
-   npx expo start
-   ```
+- Home companion chat (`memory.__sync.chatLog`)
+- Habit history, coach goals, steps/sleep (`/api/sync`)
+- Study library + flashcards (`/state.lessons`)
+- Waifu care — coins, bond, shop (`/state`)
+- Trading — signals, sniper, paper trades (server endpoints)
 
-In the output, you'll find options to open the app in a
+Guest mode is local-only (no cloud sync).
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Setup
 
 ```bash
-npm run reset-project
+npm install
+cp src/secrets.example.js src/secrets.js   # if present; add API keys locally
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+For native modules (HealthKit, WalletConnect, PDF export):
 
-## Learn more
+```bash
+npx expo run:ios
+# or
+npx expo run:android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Expo Go is limited — use a dev build for full features.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Required secrets (`src/secrets.js`, gitignored)
 
-## Join the community
+- `WALLETCONNECT_PROJECT_ID` — WalletConnect cloud project id
+- Optional fallbacks: Groq, ElevenLabs (voice goes through AWS when logged in)
 
-Join our community of developers creating universal apps.
+## Deploy / release
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Mobile ships via **EAS** or local builds — not through the EC2 server.
+
+```bash
+npx eas build --platform ios
+```
+
+After server changes land in `crypto-ai-desktop`, redeploy AWS (see that repo’s README) so sync routes stay in sync.
+
+## Related docs
+
+- PC ops: `crypto-ai-desktop/P0-OPS.md` (TLS, voice keys)
+- Feature status: `crypto-ai-desktop/FEATURE-INVENTORY.md`
