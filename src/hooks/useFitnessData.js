@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, DeviceEventEmitter, Platform } from 'react-native'
 import { localDateKey } from '../constants'
 import { pushExtrasSoon, SYNC_EXTRAS_APPLIED } from '../lib/extrasSync'
+import { adaptAsukaSoon } from '../lib/asukaHabits'
 import { apiCall } from '../utils/api'
 import { isExpoGo } from '../utils/isExpoGo'
 
@@ -69,6 +70,13 @@ export function useFitnessData(toggleHabit, todayHabits) {
       const hist = await saveStepsHistory(data.steps)
       setStepsHistory(hist)
       await syncToServer(data.steps, data.sleepHours)
+      AsyncStorage.getItem('auth-token').then((token) => {
+        if (!token) return
+        AsyncStorage.getItem('clarity-data-v1').then((raw) => {
+          const hist = raw ? JSON.parse(raw).history || {} : {}
+          adaptAsukaSoon(hist, data.steps, data.sleepHours)
+        })
+      })
     } catch (e) {
       console.log('fetch error:', e.message)
     }

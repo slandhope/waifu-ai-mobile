@@ -23,6 +23,7 @@
         "NSHealthShareUsageDescription": "waifu.ai uses Apple Health to auto-track your habits like sleep, steps and exercise.",
         "NSHealthUpdateUsageDescription": "waifu.ai uses Apple Health to auto-track your habits.",
         "NSMicrophoneUsageDescription": "waifu.ai uses the microphone when you hold the talk button so Asuka can hear and reply to you.",
+        "NSCameraUsageDescription": "waifu.ai uses the camera for Live Look — Asuka can see what you show her for study, gym form checks, and chat.",
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
@@ -46,7 +47,7 @@
         "backgroundColor": "#0a0a0f"
       },
       "package": "com.slandhope.clarity",
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": ["RECORD_AUDIO", "CAMERA"]
     },
     "extra": {
       "eas": {
@@ -66,6 +67,12 @@
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.979514312077-9pfv6i8rb2nj63qtfanq155qde3mfisc"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "waifu.ai uses the camera for Live Look — Asuka can see what you show her."
         }
       ]
     ]

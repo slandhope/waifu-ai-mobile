@@ -76,3 +76,23 @@ export function retrieveRelevantMemories(sources, query, opts = {}) {
     .sort((a, b) => b.score - a.score || (b.ts || 0) - (a.ts || 0))
     .slice(0, limit)
 }
+
+/** Same recall block as PC — shared RAG-lite for Claude chat and Grok research. */
+export function buildMemoryRecallBlock(sources, query, opts = {}) {
+  const q = query || ''
+  const limit = opts.limit ?? (q ? 45 : 60)
+  const minScore = opts.minScore ?? (q ? 0.2 : 0)
+  const retrieved = retrieveRelevantMemories(sources, q, { limit, minScore })
+  const parts = []
+  if (retrieved.length) {
+    parts.push('RECALL FROM FULL HISTORY:\n' + retrieved.map((r) => String(r.text).slice(0, 380)).join('\n'))
+  }
+  const lm = sources.longMemory
+  if (lm?.corefacts?.length > 0) {
+    parts.push('CORE FACTS:\n' + lm.corefacts.slice(-8).map((f) => f.fact || f).join('\n'))
+  }
+  if (sources.patterns?.length > 0) {
+    parts.push('BEHAVIOR PATTERNS:\n' + sources.patterns.slice(-5).map((p) => `- ${p.pattern}`).join('\n'))
+  }
+  return parts.join('\n\n').trim()
+}

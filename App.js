@@ -13,6 +13,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 import { Live2DProvider } from './src/context/Live2DContext'
 import { FitnessProvider } from './src/context/FitnessContext'
+import { LiveCameraProvider } from './src/context/LiveCameraContext'
 import { WaifuStateProvider } from './src/context/WaifuStateContext'
 
 import { useClarityData } from './src/hooks/useClarityData'
@@ -23,10 +24,14 @@ import { useTradingAlerts } from './src/hooks/useTradingAlerts'
 import { useWallpaper } from './src/hooks/useWallpaper'
 
 import AnalyticsDetailScreen from './src/screens/AnalyticsDetailScreen'
+import LiveCameraSheet from './src/components/LiveCameraSheet'
 import AwardsListScreen from './src/screens/AwardsListScreen'
 import CoachScreen from './src/screens/CoachScreen'
 import FitnessScreen from './src/screens/FitnessScreen'
+import GymWorkoutScreen from './src/screens/GymWorkoutScreen'
 import HomeScreen from './src/screens/HomeScreen'
+import HabitsScreen from './src/screens/HabitsScreen'
+import HabitDetailScreen from './src/screens/HabitDetailScreen'
 import StudyScreen from './src/screens/StudyScreen'
 import LoginScreen from './src/screens/LoginScreen'
 import OnboardingScreen from './src/screens/OnboardingScreen'
@@ -106,6 +111,7 @@ function TabNavigator({ data, profile, wallpaper }) {
             profile={profile}
             wallpaper={wallpaper}
             onSettingsPress={() => navigation.navigate('Settings')}
+            onHabitsPress={() => navigation.getParent()?.navigate('Habits')}
           />
         )}
       </Tab.Screen>
@@ -165,9 +171,16 @@ function App() {
               }} />
             ) : (
               <FitnessProvider toggleHabit={data.toggleHabit} todayHabits={data.todayHabits}>
+              <LiveCameraProvider>
               <NavigationContainer>
                 <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
                   <Stack.Screen name='Tabs'>{() => <TabNavigator data={data} profile={profile} wallpaper={wallpaper} />}</Stack.Screen>
+                  <Stack.Screen name='Habits' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
+                    {(props) => <HabitsScreen {...props} data={data} wallpaper={wallpaper} />}
+                  </Stack.Screen>
+                  <Stack.Screen name='HabitDetail' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
+                    {(props) => <HabitDetailScreen {...props} data={data} wallpaper={wallpaper} />}
+                  </Stack.Screen>
                   <Stack.Screen name='AnalyticsDetail' options={{ gestureEnabled: true, animation: 'slide_from_bottom' }}>
                     {(props) => <AnalyticsDetailScreen {...props} data={data} wallpaper={wallpaper} />}
                   </Stack.Screen>
@@ -180,11 +193,16 @@ function App() {
                   <Stack.Screen name='Fitness' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
                     {() => <FitnessScreen data={data} />}
                   </Stack.Screen>
+                  <Stack.Screen name='GymWorkout' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
+                    {(props) => <GymWorkoutScreen {...props} data={data} wallpaper={wallpaper} />}
+                  </Stack.Screen>
                   <Stack.Screen name='Premium' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
                     {(props) => <PremiumScreen {...props} wallpaper={wallpaper} />}
                   </Stack.Screen>
                 </Stack.Navigator>
               </NavigationContainer>
+              <LiveCameraSheet />
+              </LiveCameraProvider>
               </FitnessProvider>
             )}
           </View>

@@ -7,6 +7,7 @@ import {
 import { Feather } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
 import TabScreenShell from '../components/TabScreenShell'
+import { useLiveCamera } from '../context/LiveCameraContext'
 import AsukaLive2D from '../components/AsukaLive2D'
 import GlassSurface from '../components/GlassSurface'
 import {
@@ -23,6 +24,7 @@ const TOPIC_PLACEHOLDER = 'Teach me… (e.g. Japanese particles, RSI)'
 
 export default function StudyScreen({ wallpaper }) {
   const asuka = useRef(null)
+  const { openLiveCamera } = useLiveCamera()
   const lesson = useRef({ steps: [], idx: 0, title: '', topic: '' })
   const history = useRef([])
 
@@ -215,6 +217,16 @@ export default function StudyScreen({ wallpaper }) {
       const beats = await solvePhoto(asset.base64, asset.mimeType || 'image/jpeg')
       await startLesson('📷 Your problem', beats, 'photo')
     }).catch((e) => Alert.alert('Error', e?.message || 'Could not read photo'))
+  }
+
+  function openLiveCameraSolve() {
+    openLiveCamera('study', {
+      onStudyBeats: async (beats) => {
+        await runWithLoading('Building lesson…', async () => {
+          await startLesson('📷 Live problem', beats, 'photo')
+        }).catch((e) => Alert.alert('Error', e?.message || 'Could not read camera'))
+      },
+    })
   }
 
   async function submitCheckWork() {
@@ -486,9 +498,15 @@ export default function StudyScreen({ wallpaper }) {
         </View>
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={pickPhotoSolve} activeOpacity={0.85}>
-            <GlassSurface borderRadius={14} style={styles.actionChip}><Text style={styles.actionChipText}>📷 Solve a photo</Text></GlassSurface>
+          <TouchableOpacity style={{ flex: 1 }} onPress={openLiveCameraSolve} activeOpacity={0.85}>
+            <GlassSurface borderRadius={14} style={styles.actionChip}><Text style={styles.actionChipText}>📹 Live camera</Text></GlassSurface>
           </TouchableOpacity>
+          <TouchableOpacity style={{ flex: 1 }} onPress={pickPhotoSolve} activeOpacity={0.85}>
+            <GlassSurface borderRadius={14} style={styles.actionChip}><Text style={styles.actionChipText}>📷 Photo library</Text></GlassSurface>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.actionRow}>
           <TouchableOpacity style={{ flex: 1 }} onPress={() => setCheckModal(true)} activeOpacity={0.85}>
             <GlassSurface borderRadius={14} style={styles.actionChip}><Text style={styles.actionChipText}>✅ Check my work</Text></GlassSurface>
           </TouchableOpacity>

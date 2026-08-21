@@ -2,7 +2,7 @@ import { HABITS, calcScore } from '../constants'
 import { loadDailyGoals } from './aiGoalsStore'
 import { loadMemoryCache } from './memorySync'
 import { loadChatLog } from './chatSync'
-import { retrieveRelevantMemories } from './memoryRetrieval'
+import { buildMemoryRecallBlock } from './memoryRetrieval'
 
 export function buildWaifuContext({
   todayHabits = [],
@@ -35,51 +35,52 @@ export function buildWaifuContext({
     `Shop coins: ${coins} (complete habits in the Habits panel to earn more).`,
     focus ? `Coach focus today: ${focus}.` : '',
     bonusHabit ? `Bonus habit from coach: ${bonusHabit.label} — ${bonusHabit.tip || ''}.` : '',
-    memorySnippets.length ? `Things you remember about them (from full history — use naturally, never say "you told me before"):\n${memorySnippets.join('\n')}` : '',
+    memorySnippets.length
+      ? `Things you remember about them (RAG recall from full history — use naturally, never say "you told me before"):\n${memorySnippets.join('\n')}`
+      : '',
     'If they ask about habits, steps, sleep, streak, or rewards — answer from this data warmly.',
   ].filter(Boolean).join('\n')
 }
 
-/** Memory snippets for Grok research — same retrieval as chat context. */
-export async function buildGrokMemoryContext(userQuery = '') {
+async function loadMemorySources() {
   const cache = await loadMemoryCache()
   const chatLog = await loadChatLog()
-  const retrieved = retrieveRelevantMemories({
+  return {
     chatLog,
     brainMemories: cache.brainMemories || [],
     profileFacts: cache.userProfile?.facts || [],
     episodes: cache.episodes || [],
     longMemory: cache.longMemory,
-  }, userQuery, { limit: 20, minScore: 0.22 })
-  if (!retrieved.length) return ''
-  return 'What you know about this user from past chats (PC + phone):\n'
-    + retrieved.map((r) => String(r.text).slice(0, 360)).join('\n')
+    patterns: cache.patterns || [],
+  }
+}
+
+/** Memory for Grok research — identical recall path as Claude chat (no slimmer slice). */
+export async function buildGrokMemoryContext(userQuery = '') {
+  const sources = await loadMemorySources()
+  const block = buildMemoryRecallBlock(sources, userQuery)
+  if (!block) return ''
+  return 'What you know about this user from past chats (PC + phone):\n' + block
 }
 
 export async function buildWaifuContextAsync(base, userQuery = '') {
   const daily = await loadDailyGoals()
-  const cache = await loadMemoryCache()
-  const chatLog = await loadChatLog()
+  const sources = await loadMemorySources()
   const q = userQuery || base?.lastUserText || ''
 
-  const retrieved = retrieveRelevantMemories({
-    chatLog,
-    brainMemories: cache.brainMemories || [],
-    profileFacts: cache.userProfile?.facts || [],
-    episodes: cache.episodes || [],
-    longMemory: cache.longMemory,
-  }, q, { limit: q ? 28 : 14, minScore: q ? 0.2 : 0 })
-
-  let snippets = retrieved.map((r) => `- ${String(r.text).slice(0, 380)}`)
+  const recall = buildMemoryRecallBlock(sources, q)
+  let snippets = recall
+    ? recall.split('\n').filter(Boolean).map((line) => (line.startsWith('- ') ? line : `- ${line}`))
+    : []
 
   if (!snippets.length) {
-    for (const f of (cache.userProfile?.facts || []).slice(-5)) {
+    for (const f of (sources.profileFacts || []).slice(-5)) {
       if (f) snippets.push(`- [knows] ${f}`)
     }
-    for (const ep of (cache.episodes || []).slice(-3)) {
+    for (const ep of (sources.episodes || []).slice(-3)) {
       if (ep?.summary) snippets.push(`- [memory] ${ep.summary}`)
     }
-    for (const m of (cache.brainMemories || []).slice(-3)) {
+    for (const m of (sources.brainMemories || []).slice(-3)) {
       if (m?.text) snippets.push(`- [saved] ${m.text}`)
     }
   }

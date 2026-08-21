@@ -12,6 +12,11 @@ const REWARD_KEY = 'habit-rewards-day-v1'
 const ALERT_SETTINGS_KEY = 'training-alert-settings-v1'
 const ALERT_HISTORY_KEY = 'trading-alert-history-v1'
 const CLARITY_KEY = 'clarity-data-v1'
+const CUSTOM_HABITS_KEY = 'custom-habits-v1'
+const HABIT_NOTES_KEY = 'habit-notes-v1'
+const ASUKA_HABITS_KEY = 'asuka-habits-v1'
+const GYM_SESSIONS_KEY = 'gym-sessions-v1'
+const GYM_PLAN_KEY = 'gym-plan-v1'
 
 function safeUri(uri) {
   if (!uri || typeof uri !== 'string') return null
@@ -109,6 +114,15 @@ export function mergeSyncExtras(local, remote) {
       history: mergeById(local.tradingAlerts?.history, remote.tradingAlerts?.history, 50),
     },
     weeklyInsight: remote.weeklyInsight || local.weeklyInsight || null,
+    customHabits: mergeById(local.customHabits, remote.customHabits, 30),
+    habitNotes: { ...(remote.habitNotes || {}), ...(local.habitNotes || {}) },
+    asukaHabits: (remote.asukaHabits?.date || '') >= (local.asukaHabits?.date || '')
+      ? (remote.asukaHabits || local.asukaHabits)
+      : (local.asukaHabits || remote.asukaHabits),
+    gymSessions: mergeById(local.gymSessions, remote.gymSessions, 60),
+    gymPlan: (remote.gymPlan?.date || '') >= (local.gymPlan?.date || '')
+      ? (remote.gymPlan || local.gymPlan)
+      : (local.gymPlan || remote.gymPlan),
     updatedAt: Math.max(local.updatedAt || 0, remote.updatedAt || 0, Date.now()),
   }
 }
@@ -116,11 +130,12 @@ export function mergeSyncExtras(local, remote) {
 export async function collectLocalExtras(coachChatOverride) {
   const [
     stepsRaw, resumeRaw, webRaw, histRaw, rewardRaw,
-    alertSetRaw, alertHistRaw, clarityRaw,
+    alertSetRaw, alertHistRaw, clarityRaw, customRaw, notesRaw, asukaRaw, gymSessRaw, gymPlanRaw,
     wallpaperId, avatarType, animalAvatar, avatarUri, googlePhoto,
   ] = await AsyncStorage.multiGet([
     STEPS_KEY, RESUME_KEY, WEBSITE_KEY, HISTORY_KEY, REWARD_KEY,
     ALERT_SETTINGS_KEY, ALERT_HISTORY_KEY, CLARITY_KEY,
+    CUSTOM_HABITS_KEY, HABIT_NOTES_KEY, ASUKA_HABITS_KEY, GYM_SESSIONS_KEY, GYM_PLAN_KEY,
     'wallpaper-id', 'avatar-type', 'animal-avatar', 'avatar-uri', 'google-photo',
   ])
 
@@ -160,6 +175,11 @@ export async function collectLocalExtras(coachChatOverride) {
       history: alertHistRaw[1] ? JSON.parse(alertHistRaw[1]) : [],
     },
     weeklyInsight,
+    customHabits: customRaw[1] ? JSON.parse(customRaw[1]) : [],
+    habitNotes: notesRaw[1] ? JSON.parse(notesRaw[1]) : {},
+    asukaHabits: asukaRaw[1] ? JSON.parse(asukaRaw[1]) : null,
+    gymSessions: gymSessRaw[1] ? JSON.parse(gymSessRaw[1]) : [],
+    gymPlan: gymPlanRaw[1] ? JSON.parse(gymPlanRaw[1]) : null,
     updatedAt: Date.now(),
   }
 }
@@ -206,6 +226,21 @@ export async function applyLocalExtras(extras) {
       data.weeklyInsight = extras.weeklyInsight
       ops.push([CLARITY_KEY, JSON.stringify(data)])
     } catch {}
+  }
+  if (extras.customHabits) {
+    ops.push([CUSTOM_HABITS_KEY, JSON.stringify(extras.customHabits)])
+  }
+  if (extras.habitNotes) {
+    ops.push([HABIT_NOTES_KEY, JSON.stringify(extras.habitNotes)])
+  }
+  if (extras.asukaHabits) {
+    ops.push([ASUKA_HABITS_KEY, JSON.stringify(extras.asukaHabits)])
+  }
+  if (extras.gymSessions) {
+    ops.push([GYM_SESSIONS_KEY, JSON.stringify(extras.gymSessions)])
+  }
+  if (extras.gymPlan) {
+    ops.push([GYM_PLAN_KEY, JSON.stringify(extras.gymPlan)])
   }
   if (ops.length) await AsyncStorage.multiSet(ops)
   DeviceEventEmitter.emit(SYNC_EXTRAS_APPLIED, extras)

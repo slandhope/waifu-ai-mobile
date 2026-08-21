@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { calcStreak, missedDays, todayKey } from "../constants";
 import { mergeCoachFromServer, goalsToCloudPayload, loadDailyGoals } from "../lib/aiGoalsStore";
 import { pullAllFromCloud, pushAllSoon } from "../lib/cloudSync";
+import { renewAsukaHabits } from "../lib/asukaHabits";
 import { collectLocalExtras } from "../lib/extrasSync";
 import { apiCall, fetchMe } from "../utils/api";
 import { isExpoGo } from "../utils/isExpoGo";
@@ -69,6 +70,7 @@ export function useClarityData() {
           serverData = await fetchMe()
           if (serverData) {
             await pullAllFromCloud(serverData)
+            renewAsukaHabits().catch(() => {})
             const refreshed = await AsyncStorage.getItem(STORAGE_KEY)
             if (refreshed) {
               const parsed = JSON.parse(refreshed)
@@ -150,6 +152,16 @@ export function useClarityData() {
     return next;
   };
 
+  const toggleHabitOnDate = (id, dateKey) => {
+    if (!dateKey || dateKey > todayKey()) return history[dateKey] || [];
+    const current = history[dateKey] || [];
+    const next = current.includes(id)
+      ? current.filter((h) => h !== id)
+      : [...current, id];
+    setHistory((prev) => ({ ...prev, [dateKey]: next }));
+    return next;
+  };
+
   const addMessage = (msg) => setMessages((prev) => [...prev.slice(-30), msg]);
   const markMilestoneSeen = (val) => setSeenMilestones((prev) => [...prev, val]);
   const setWeeklyInsightSynced = (val) => {
@@ -161,6 +173,6 @@ export function useClarityData() {
     loaded, history, todayHabits, streak, missed,
     messages, setMessages, addMessage,
     weeklyInsight, setWeeklyInsight: setWeeklyInsightSynced,
-    seenMilestones, markMilestoneSeen, toggleHabit,
+    seenMilestones, markMilestoneSeen, toggleHabit, toggleHabitOnDate,
   };
 }

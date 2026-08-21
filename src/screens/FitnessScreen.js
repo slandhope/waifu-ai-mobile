@@ -81,6 +81,25 @@ export default function FitnessScreen({ data }) {
           </View>
         )}
 
+        {/* gym log */}
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            navigation.navigate('Habits', { tab: 'gym' })
+          }}
+          style={[styles.gymCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.gymEmoji}>🏋️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.gymTitle, { color: colors.text }]}>Gym log</Text>
+            <Text style={[styles.gymSub, { color: colors.textMuted }]}>
+              Asuka plans your workout · log sets, reps & weight
+            </Text>
+          </View>
+          <Text style={[styles.gymArrow, { color: accent.primary }]}>→</Text>
+        </TouchableOpacity>
+
         {/* sources */}
         <Text style={[styles.sectionLabel, { color: colors.textFaint }]}>
           {Platform.OS === 'ios' ? 'IOS SOURCES' : 'ANDROID SOURCES'}
@@ -160,6 +179,19 @@ const styles = StyleSheet.create({
   infoIcon: { fontSize: 20 },
   infoTitle: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
   infoSub: { fontSize: 11, lineHeight: 16 },
+  gymCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 24,
+  },
+  gymEmoji: { fontSize: 28 },
+  gymTitle: { fontSize: 16, fontWeight: '700' },
+  gymSub: { fontSize: 12, marginTop: 4, lineHeight: 17 },
+  gymArrow: { fontSize: 22, fontWeight: '600' },
   sectionLabel: { fontSize: 10, letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 },
   card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 24 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
