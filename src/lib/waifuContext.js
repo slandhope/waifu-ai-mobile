@@ -1,6 +1,8 @@
 import { HABITS, calcScore } from '../constants'
 import { loadDailyGoals } from './aiGoalsStore'
 import { loadMemoryCache } from './memorySync'
+import { loadChatLog } from './chatSync'
+import { retrieveRelevantMemories } from './memoryRetrieval'
 
 export function buildWaifuContext({
   todayHabits = [],
@@ -33,24 +35,55 @@ export function buildWaifuContext({
     `Shop coins: ${coins} (complete habits in the Habits panel to earn more).`,
     focus ? `Coach focus today: ${focus}.` : '',
     bonusHabit ? `Bonus habit from coach: ${bonusHabit.label} — ${bonusHabit.tip || ''}.` : '',
-    memorySnippets.length ? `Things you remember about them:\n${memorySnippets.join('\n')}` : '',
+    memorySnippets.length ? `Things you remember about them (from full history — use naturally, never say "you told me before"):\n${memorySnippets.join('\n')}` : '',
     'If they ask about habits, steps, sleep, streak, or rewards — answer from this data warmly.',
   ].filter(Boolean).join('\n')
 }
 
-export async function buildWaifuContextAsync(base) {
+/** Memory snippets for Grok research — same retrieval as chat context. */
+export async function buildGrokMemoryContext(userQuery = '') {
+  const cache = await loadMemoryCache()
+  const chatLog = await loadChatLog()
+  const retrieved = retrieveRelevantMemories({
+    chatLog,
+    brainMemories: cache.brainMemories || [],
+    profileFacts: cache.userProfile?.facts || [],
+    episodes: cache.episodes || [],
+    longMemory: cache.longMemory,
+  }, userQuery, { limit: 20, minScore: 0.22 })
+  if (!retrieved.length) return ''
+  return 'What you know about this user from past chats (PC + phone):\n'
+    + retrieved.map((r) => String(r.text).slice(0, 360)).join('\n')
+}
+
+export async function buildWaifuContextAsync(base, userQuery = '') {
   const daily = await loadDailyGoals()
   const cache = await loadMemoryCache()
-  const snippets = []
-  for (const f of (cache.userProfile?.facts || []).slice(-5)) {
-    if (f) snippets.push(`- ${f}`)
+  const chatLog = await loadChatLog()
+  const q = userQuery || base?.lastUserText || ''
+
+  const retrieved = retrieveRelevantMemories({
+    chatLog,
+    brainMemories: cache.brainMemories || [],
+    profileFacts: cache.userProfile?.facts || [],
+    episodes: cache.episodes || [],
+    longMemory: cache.longMemory,
+  }, q, { limit: q ? 28 : 14, minScore: q ? 0.2 : 0 })
+
+  let snippets = retrieved.map((r) => `- ${String(r.text).slice(0, 380)}`)
+
+  if (!snippets.length) {
+    for (const f of (cache.userProfile?.facts || []).slice(-5)) {
+      if (f) snippets.push(`- [knows] ${f}`)
+    }
+    for (const ep of (cache.episodes || []).slice(-3)) {
+      if (ep?.summary) snippets.push(`- [memory] ${ep.summary}`)
+    }
+    for (const m of (cache.brainMemories || []).slice(-3)) {
+      if (m?.text) snippets.push(`- [saved] ${m.text}`)
+    }
   }
-  for (const ep of (cache.episodes || []).slice(-3)) {
-    if (ep?.summary) snippets.push(`- [memory] ${ep.summary}`)
-  }
-  for (const m of (cache.brainMemories || []).slice(-3)) {
-    if (m?.text) snippets.push(`- [saved] ${m.text}`)
-  }
+
   return buildWaifuContext({
     ...base,
     coachGoals: daily.goals || [],

@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { GROQ_API_KEY, ELEVENLABS_API_KEY, VOICE_ID } from '../secrets'
 import { apiCall } from '../utils/api'
+import { shouldUseGrokResearch } from './grokResearch'
+import { runGrokResearch } from './grokAgent'
+import { buildGrokMemoryContext } from './waifuContext'
 
 // Groq retired llama-3.3-70b-versatile on 2026-08-16 — chat goes through AWS like PC
 const GROQ_VISION_MODEL = 'llama-3.2-90b-vision-preview'
@@ -93,6 +96,21 @@ async function brainText(system, user) { return brainRaw(system, user, 0.7, 700)
 
 // ── Normal chat reply (AWS — same path as PC) ──
 export async function getReply(history, userText, contextBlock = '') {
+  if (shouldUseGrokResearch(userText)) {
+    try {
+      const memCtx = await buildGrokMemoryContext(userText)
+      return await runGrokResearch(userText, { context: memCtx })
+    } catch (e) {
+      if (e.code === 'INSUFFICIENT_CREDITS') {
+        return 'Deep research costs 25 credits — top up in settings, or ask something simpler!'
+      }
+      if (e.code === 'NOT_SIGNED_IN') {
+        return 'Sign in to use live web research — guest mode is chat-only.'
+      }
+      // fall through to normal Claude chat on failure
+    }
+  }
+
   const tutor = tutorMode && !/just tell me/i.test(userText) ? TUTOR_RULES : ''
   const system =
     "You are Asuka, the user's anime waifu companion on their phone. " +

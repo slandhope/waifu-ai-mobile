@@ -14,6 +14,7 @@ import { useFitness } from '../context/FitnessContext'
 import { CHARACTERS } from '../lib/characters'
 import { buildWaifuContextAsync } from '../lib/waifuContext'
 import { useLive2DCharacter } from '../context/Live2DContext'
+import { useLiveCamera } from '../context/LiveCameraContext'
 import { useWaifuState } from '../context/WaifuStateContext'
 import { getLive2dExprsForEquipped } from '../lib/waifuCare'
 import { getReply, synthesize, transcribe, trySwitch, handleTeaching } from '../lib/waifu'
@@ -68,12 +69,13 @@ function MiniClock() {
   )
 }
 
-export default function WaifuStage({ onSettingsPress, profile, data }) {
+export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, data }) {
   const asuka = useRef(null)
   const recRef = useRef(null)
   const recordingRef = useRef(false)
   const { characterId, character, swapCharacter } = useLive2DCharacter()
   const { care, relationship, careAction, buyItem, equipItem, getCatalog } = useWaifuState()
+  const { openLiveCamera } = useLiveCamera()
   const { steps, sleepHours, activeMinutes, connected } = useFitness()
   const [input, setInput] = useState('')
   const [reply, setReply] = useState('')
@@ -119,7 +121,7 @@ export default function WaifuStage({ onSettingsPress, profile, data }) {
             activeMinutes,
             connected,
             coins: care?.coins ?? 0,
-          })
+          }, msg)
           answer = await getReply(history, msg, ctx)
         }
       }
@@ -277,7 +279,7 @@ export default function WaifuStage({ onSettingsPress, profile, data }) {
 
   const COMPANION_BTNS = [
     { key: 'talk', icon: 'mic', label: 'Talk' },
-    { key: 'habits', icon: 'check-circle', label: 'Habits', badge: habitsLeft > 0 ? habitsLeft : null },
+    { key: 'habits', icon: 'check-circle', label: 'Habits & Gym', badge: habitsLeft > 0 ? habitsLeft : null },
     { key: 'room', icon: 'image', label: 'Room' },
     { key: 'care', icon: 'heart', label: 'Care' },
     { key: 'shop', icon: 'shopping-bag', label: 'Shop' },
@@ -330,7 +332,10 @@ export default function WaifuStage({ onSettingsPress, profile, data }) {
       {/* Layer 3 — companion actions beside her */}
       <View style={styles.companionStrip} pointerEvents="box-none">
         {COMPANION_BTNS.map((b) => (
-          <TouchableOpacity key={b.key} onPress={() => setPanel(b.key)} activeOpacity={0.85}>
+          <TouchableOpacity key={b.key} onPress={() => {
+            if (b.key === 'habits' && onHabitsPress) onHabitsPress()
+            else setPanel(b.key)
+          }} activeOpacity={0.85}>
             <GlassSurface borderRadius={16} style={styles.companionChip}>
               <View style={styles.companionChipInner}>
                 <Feather name={b.icon} size={18} color="#333" />
@@ -373,6 +378,15 @@ export default function WaifuStage({ onSettingsPress, profile, data }) {
             returnKeyType="send"
           />
         </GlassSurface>
+        <TouchableOpacity
+          onPress={() => openLiveCamera('home', { onHomeReply: (text) => setReply(text) })}
+          activeOpacity={0.85}
+          style={styles.mediaBtn}
+        >
+          <GlassSurface borderRadius={28} style={styles.mediaBtnInner}>
+            <Feather name="camera" size={22} color="#333" />
+          </GlassSurface>
+        </TouchableOpacity>
         {renderPttButton()}
         {!!input.trim() && !recording && (
           <TouchableOpacity style={styles.sendFab} onPress={() => send()} disabled={busy} activeOpacity={0.85}>
@@ -387,7 +401,7 @@ export default function WaifuStage({ onSettingsPress, profile, data }) {
             <View style={styles.sheetHead}>
               <Text style={styles.sheetTitle}>
                 {panel === 'talk' ? 'Talk'
-                  : panel === 'habits' ? 'Daily Habits'
+                  : panel === 'habits' ? 'Habits & Gym'
                   : panel === 'room' ? 'Room & Scenes'
                   : panel === 'care' ? 'Care'
                   : panel === 'shop' ? 'Dress-Up Shop'
@@ -679,6 +693,8 @@ const styles = StyleSheet.create({
   input: { paddingHorizontal: 22, paddingVertical: 16, fontSize: 16, color: '#1a1a1a' },
   micBtn: {},
   micInner: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
+  mediaBtn: {},
+  mediaBtnInner: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
   pttActive: { opacity: 0.92 },
   pttLarge: { alignItems: 'center', marginTop: 20, gap: 12 },
   pttLargeInner: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
@@ -686,7 +702,7 @@ const styles = StyleSheet.create({
   talkPanel: { alignItems: 'center' },
   sendFab: {
     position: 'absolute',
-    right: 68,
+    right: 134,
     width: 36,
     height: 36,
     borderRadius: 18,
