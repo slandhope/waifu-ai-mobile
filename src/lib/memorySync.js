@@ -5,8 +5,8 @@ const CHAT_KEY = 'waifu-chat-log-v1'
 const CHAT_CAP = 5000
 const SYNC_WIRE_CAP = 800
 const MEMORY_CACHE_KEY = 'asuka-memory-cache-v1'
-/** Skip cloud pull if local cache was updated within this window (cost + battery). */
-export const MEMORY_PULL_COOLDOWN_MS = 5 * 60 * 1000
+/** Skip background pull if cache fresh — Home chat + login use force:true. */
+export const MEMORY_PULL_COOLDOWN_MS = 90 * 1000
 const CHAT_PUSH_DEBOUNCE_MS = 10000
 
 function mergeChatLogs(a, b) {
