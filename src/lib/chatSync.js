@@ -69,13 +69,13 @@ export async function appendChatMessage(role, text) {
   return trimmed
 }
 
-export async function pullChatFromCloud() {
+export async function pullChatFromCloud(options = {}) {
   const { pullMemoryFromCloud } = await import('./memorySync')
-  return pullMemoryFromCloud()
+  return pullMemoryFromCloud(options)
 }
 
 let _pushTimer = null
-export function pushChatSoon(ms = 2000) {
+export function pushChatSoon(ms = 10000) {
   clearTimeout(_pushTimer)
   _pushTimer = setTimeout(() => {
     import('./memorySync').then((m) => m.pushMemoryToCloud()).catch(() => {})

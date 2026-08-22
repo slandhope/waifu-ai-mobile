@@ -100,7 +100,7 @@ export function WaifuStateProvider({ children }) {
   const refreshFromCloud = useCallback(async () => {
     const local = careRef.current || (await loadLocalCare())
     const result = await pullAndMergeCare(local)
-    await pullChatFromCloud().catch(() => {})
+    await pullChatFromCloud({ force: true }).catch(() => {})
     setCare(applyDecay(result.care))
     return result
   }, [])

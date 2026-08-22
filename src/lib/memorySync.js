@@ -5,6 +5,9 @@ const CHAT_KEY = 'waifu-chat-log-v1'
 const CHAT_CAP = 5000
 const SYNC_WIRE_CAP = 800
 const MEMORY_CACHE_KEY = 'asuka-memory-cache-v1'
+/** Skip cloud pull if local cache was updated within this window (cost + battery). */
+export const MEMORY_PULL_COOLDOWN_MS = 5 * 60 * 1000
+const CHAT_PUSH_DEBOUNCE_MS = 10000
 
 function mergeChatLogs(a, b) {
   const map = new Map()
@@ -101,13 +104,36 @@ async function buildLocalSyncBundle() {
   }
 }
 
-export async function pullMemoryFromCloud() {
+async function bundleFromLocalCache() {
+  const cache = await loadMemoryCache()
+  const chatLog = await loadChatLogLocal()
+  return {
+    v: 2,
+    chatLog,
+    longMemory: cache.longMemory || null,
+    brainMemories: cache.brainMemories || [],
+    patterns: cache.patterns || [],
+    journal: cache.journal || [],
+    voiceJournal: cache.voiceJournal || [],
+    notes: cache.notes || [],
+    userProfile: cache.userProfile || { facts: [] },
+    episodes: cache.episodes || [],
+    _cached: true,
+  }
+}
+
+export async function pullMemoryFromCloud({ force = false } = {}) {
   try {
     const token = await AsyncStorage.getItem('auth-token')
     if (!token) return null
 
+    const cache = await loadMemoryCache()
+    if (!force && cache.updatedAt && Date.now() - cache.updatedAt < MEMORY_PULL_COOLDOWN_MS) {
+      return bundleFromLocalCache()
+    }
+
     const res = await apiCall('/state')
-    if (res.status === 401 || !res.ok) return null
+    if (res.status === 401 || !res.ok) return bundleFromLocalCache()
 
     const cloud = await res.json()
     const cloudSync = cloud?.memory?.__sync || {}
@@ -132,10 +158,10 @@ export async function pullMemoryFromCloud() {
     if (JSON.stringify(merged) !== JSON.stringify(localBundle)) {
       pushMemoryToCloud(merged).catch(() => {})
     }
-    return merged
+    return { ...merged, chatLog: mergedChat }
   } catch (e) {
     console.log('[memorySync] pull skipped:', e.message)
-    return null
+    return bundleFromLocalCache()
   }
 }
 
@@ -172,6 +198,10 @@ export async function pushMemoryToCloud(mergedBundle) {
         updatedAt: Math.max(Date.now(), serverUpdatedAt),
       }),
     })
+    if (patch.ok) {
+      const cache = await loadMemoryCache()
+      await saveMemoryCache({ ...cache, updatedAt: Date.now() })
+    }
     return patch.ok
   } catch (e) {
     console.log('[memorySync] push skipped:', e.message)
@@ -180,7 +210,7 @@ export async function pushMemoryToCloud(mergedBundle) {
 }
 
 let _memTimer = null
-export function pushMemorySoon(ms = 2500) {
+export function pushMemorySoon(ms = CHAT_PUSH_DEBOUNCE_MS) {
   clearTimeout(_memTimer)
   _memTimer = setTimeout(() => { pushMemoryToCloud().catch(() => {}) }, ms)
 }

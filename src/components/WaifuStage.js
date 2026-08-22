@@ -178,7 +178,8 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
     ;(async () => {
       const merged = await pullChatFromCloud()
       if (cancelled) return
-      const apiHist = merged ? toApiHistory(merged, 20) : await getApiHistoryForReply(20)
+      const log = merged?.chatLog || (Array.isArray(merged) ? merged : null)
+      const apiHist = log?.length ? toApiHistory(log, 20) : await getApiHistoryForReply(20)
       if (apiHist.length) setHistory(apiHist)
     })()
     return () => { cancelled = true }

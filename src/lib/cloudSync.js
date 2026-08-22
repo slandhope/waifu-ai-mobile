@@ -9,7 +9,7 @@ export async function pullAllFromCloud(serverData) {
     results.coachGoals = await mergeCoachFromServer(serverData)
     results.extras = await pullExtrasFromServer(serverData)
   }
-  results.memory = await pullMemoryFromCloud()
+  results.memory = await pullMemoryFromCloud({ force: true })
   results.study = await pullStudyFromCloud()
   return results
 }
