@@ -7,6 +7,7 @@ import {
 import { Feather } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
 import TabScreenShell from '../components/TabScreenShell'
+import { isExpoGo } from '../utils/isExpoGo'
 import { useLiveCamera } from '../context/LiveCameraContext'
 import AsukaLive2D from '../components/AsukaLive2D'
 import GlassSurface from '../components/GlassSurface'
@@ -362,9 +363,11 @@ export default function StudyScreen({ wallpaper }) {
                 <Text style={[styles.boardContent, prefs.whiteboardOn && styles.boardContentGreen]}>{boardContent}</Text>
               </ScrollView>
             </GlassSurface>
-            <View style={styles.asukaWrap} pointerEvents="none">
-              <AsukaLive2D ref={asuka} style={styles.asuka} />
-            </View>
+            {!isExpoGo() && (
+              <View style={styles.asukaWrap} pointerEvents="none">
+                <AsukaLive2D ref={asuka} style={styles.asuka} />
+              </View>
+            )}
           </View>
 
           <GlassSurface borderRadius={20} style={styles.dialogue}>

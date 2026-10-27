@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons'
-import { Audio } from 'expo-av'
+import { playUri } from '../lib/audio'
 import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
@@ -42,8 +42,7 @@ export default function LiveCameraFallback() {
   async function speak(text) {
     try {
       const audio = await synthesize(text)
-      const { sound } = await Audio.Sound.createAsync({ uri: audio })
-      await sound.playAsync()
+      playUri(audio)
     } catch (_e) {}
   }
 

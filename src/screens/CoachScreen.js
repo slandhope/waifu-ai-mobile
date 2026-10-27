@@ -2,9 +2,9 @@ import { Feather } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
-import { LinearGradient } from 'expo-linear-gradient'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { isExpoGo } from '../utils/isExpoGo'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import GlassSurface from '../components/GlassSurface'
 import TabScreenShell from '../components/TabScreenShell'
@@ -224,15 +224,16 @@ YOUR ROLE:
     }
   }
 
+  const Avoid = isExpoGo() ? View : KeyboardAvoidingView
+  const avoidProps = isExpoGo()
+    ? { style: { flex: 1, width: '100%' }, collapsable: false }
+    : { style: { flex: 1 }, behavior: Platform.OS === 'ios' ? 'padding' : undefined, keyboardVerticalOffset: 0 }
+
   return (
     <TabScreenShell wallpaper={wallpaper}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
+      <Avoid {...avoidProps}>
           {/* header */}
-          <View style={styles.header}>
+          <View style={[styles.header, isExpoGo() && { backgroundColor: 'rgba(255,255,255,0.92)', marginHorizontal: 16, borderRadius: 20, padding: 16 }]}>
             <View>
               <Text style={styles.dateText}>{getDate()}</Text>
               <Text style={styles.greeting}>{getGreeting()}, ✨</Text>
@@ -261,9 +262,9 @@ YOUR ROLE:
           >
             {/* coach identity */}
             <View style={styles.coachRow}>
-              <LinearGradient colors={['#7c3aed', '#a855f7']} style={styles.coachAvatar}>
+              <View style={[styles.coachAvatar, { backgroundColor: '#7c3aed' }]}>
                 <Text style={styles.coachAvatarIcon}>✦</Text>
-              </LinearGradient>
+              </View>
               <View>
                 <Text style={styles.coachName}>waifu.ai Coach</Text>
                 <Text style={styles.coachSub}>Science-grounded, never preachy</Text>
@@ -336,9 +337,9 @@ YOUR ROLE:
               {messages.map((msg, i) => (
                 <View key={i} style={[styles.msgRow, msg.role === 'user' ? styles.msgRowUser : styles.msgRowAssistant]}>
                   {msg.role === 'assistant' && (
-                    <LinearGradient colors={['#7c3aed', '#a855f7']} style={styles.msgAvatar}>
+                    <View style={[styles.msgAvatar, { backgroundColor: '#7c3aed' }]}>
                       <Text style={{ fontSize: 10, color: '#fff' }}>✦</Text>
-                    </LinearGradient>
+                    </View>
                   )}
                   <GlassSurface
                     style={[styles.msgBubble, msg.role === 'user' && styles.msgBubbleUser]}
@@ -350,9 +351,9 @@ YOUR ROLE:
               ))}
               {loading && (
                 <View style={[styles.msgRow, styles.msgRowAssistant]}>
-                  <LinearGradient colors={['#7c3aed', '#a855f7']} style={styles.msgAvatar}>
+                  <View style={[styles.msgAvatar, { backgroundColor: '#7c3aed' }]}>
                     <Text style={{ fontSize: 10, color: '#fff' }}>✦</Text>
-                  </LinearGradient>
+                  </View>
                   <GlassSurface style={styles.msgBubble} borderRadius={18}>
                     <ActivityIndicator color='#6c5ce7' size='small' />
                   </GlassSurface>
@@ -385,7 +386,7 @@ YOUR ROLE:
             </GlassSurface>
           </View>
 
-        </KeyboardAvoidingView>
+      </Avoid>
     </TabScreenShell>
   )
 }

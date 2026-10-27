@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef } from 'react'
 import { getCharacter } from '../lib/characters'
 import { useCharacter } from '../hooks/useCharacter'
 
@@ -6,6 +6,7 @@ const Live2DContext = createContext(null)
 
 export function Live2DProvider({ children }) {
   const { characterId, character, setCharacterId, loaded: characterLoaded } = useCharacter()
+  const live2dRef = useRef(null)
 
   const swapCharacter = useCallback(async (id) => {
     if (id === characterId || !getCharacter(id)) return
@@ -13,7 +14,7 @@ export function Live2DProvider({ children }) {
   }, [characterId, setCharacterId])
 
   const value = useMemo(
-    () => ({ characterId, character, characterLoaded, swapCharacter }),
+    () => ({ characterId, character, characterLoaded, swapCharacter, live2dRef }),
     [characterId, character, characterLoaded, swapCharacter]
   )
 

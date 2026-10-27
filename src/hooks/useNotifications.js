@@ -1,19 +1,27 @@
 import * as Device from 'expo-device'
-import * as Notifications from 'expo-notifications'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useEffect } from 'react'
 import { Platform } from 'react-native'
+import { isExpoGo } from '../utils/isExpoGo'
 
-// makes sure notifications show even when app is open
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-})
+let Notifications = null
+try {
+  if (!isExpoGo()) {
+    Notifications = require('expo-notifications')
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    })
+  }
+} catch (_e) {
+  Notifications = null
+}
 
 export async function askPermission() {
+  if (isExpoGo() || !Notifications) return false
   // only works on real devices not simulator
   if(!Device.isDevice) {
     console.log('notifications only work on real device')
@@ -46,6 +54,7 @@ export async function askPermission() {
 
 // schedule daily reminder at a specific hour
 export async function scheduleDailyReminder(hour = 20, minute = 0) {
+  if (!Notifications) return
   // cancel old ones first
   await Notifications.cancelAllScheduledNotificationsAsync()
 
@@ -67,7 +76,7 @@ export async function scheduleDailyReminder(hour = 20, minute = 0) {
 
 // sends a notification when streak is about to break
 export async function sendStreakWarning(streak) {
-  if(streak < 1) return
+  if (!Notifications || streak < 1) return
 
   await Notifications.scheduleNotificationAsync({
     content: {
@@ -83,6 +92,7 @@ export async function sendStreakWarning(streak) {
 
 // sad notification after missing days
 export async function sendMissedDayNotification(missed) {
+  if (!Notifications) return
   let msg = ''
 
   if(missed === 1) {
@@ -107,7 +117,7 @@ export async function sendMissedDayNotification(missed) {
 
 export function useNotifications(missed, streak, enabled = true) {
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || isExpoGo() || !Notifications) return
     let cancelled = false
     ;(async () => {
       await new Promise((r) => setTimeout(r, 1000))

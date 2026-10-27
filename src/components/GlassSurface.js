@@ -1,35 +1,34 @@
-import { BlurView } from 'expo-blur'
-import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect'
-import { Platform, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { canUseNativeGlass } from '../lib/glass'
 
-export default function GlassSurface({ children, style, borderRadius = 24, intensity = 40 }) {
-  const glassAvailable = isGlassEffectAPIAvailable()
+export default function GlassSurface({ children, style, borderRadius = 24, intensity: _intensity = 40 }) {
+  const fallback = [
+    styles.base,
+    styles.fallback,
+    { borderRadius, overflow: 'hidden' },
+    style,
+  ]
 
-  if (glassAvailable) {
-    return (
-      <GlassView
-        style={[styles.base, { borderRadius, overflow: 'hidden' }, style]}
-        glassEffectStyle="regular"
-        colorScheme="light"
-      >
-        {children}
-      </GlassView>
-    )
+  // Expo Go 58 Liquid Glass / BlurView paints a full-screen transparent
+  // overlay that hides Home chrome (greeting, dock, tabs). Solid fill only.
+  if (canUseNativeGlass()) {
+    try {
+      const { GlassView } = require('expo-glass-effect')
+      return (
+        <GlassView
+          style={[styles.base, { borderRadius, overflow: 'hidden' }, style]}
+          glassEffectStyle="regular"
+          colorScheme="light"
+        >
+          {children}
+        </GlassView>
+      )
+    } catch (_e) {
+      // missing native module
+    }
   }
 
-  if (Platform.OS === 'ios') {
-    return (
-      <BlurView intensity={intensity} tint="light" style={[styles.base, styles.fallback, { borderRadius, overflow: 'hidden' }, style]}>
-        {children}
-      </BlurView>
-    )
-  }
-
-  return (
-    <View style={[styles.base, styles.fallback, { borderRadius, overflow: 'hidden' }, style]}>
-      {children}
-    </View>
-  )
+  return <View style={fallback}>{children}</View>
 }
 
 const styles = StyleSheet.create({
@@ -43,6 +42,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   fallback: {
-    backgroundColor: 'rgba(255,255,255,0.42)',
+    backgroundColor: 'rgba(255,255,255,0.88)',
   },
 })

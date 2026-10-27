@@ -1,9 +1,28 @@
 import { Asset } from 'expo-asset'
+import Constants from 'expo-constants'
 import * as FileSystem from 'expo-file-system/legacy'
 import { ASUKA_ASSETS, ASUKA_MODEL_FILE } from '../../assets/live2d/asukaManifest'
 import { ALEXIA_ASSETS, ALEXIA_MODEL_FILE } from '../../assets/live2d/alexiaManifest'
 import { LIVE2D_JS_ASSETS } from '../../assets/live2d/live2dJsManifest'
 import { buildViewerHtmlDocument, getCharacter } from './characters'
+
+function bundlerOrigin() {
+  try {
+    const host =
+      Constants.expoConfig?.hostUri ||
+      Constants.manifest2?.extra?.expoGo?.debuggerHost ||
+      ''
+    const cleaned = String(host)
+      .replace(/^exp:\/\//, '')
+      .replace(/^https?:\/\//, '')
+      .split('/')[0]
+      .split('?')[0]
+    if (!cleaned) return null
+    return `http://${cleaned}`
+  } catch (_e) {
+    return null
+  }
+}
 
 const BUNDLED = {
   asuka: { assets: ASUKA_ASSETS, modelFile: ASUKA_MODEL_FILE },
@@ -152,15 +171,20 @@ async function writeViewerPage(characterId, scale, modelFile, virtualFiles, onPr
     )
   }
 
-  const html = buildViewerHtmlDocument(scale, modelFile, !useInject)
+  const origin = bundlerOrigin()
+  const scriptBase = origin ? `${origin}/live2d` : '..'
+  // Expo Go: always inject model bytes. file:// vf.data.js is blocked.
+  const html = buildViewerHtmlDocument(scale, modelFile, false, scriptBase)
   const viewerPath = `${charDir}viewer.html`
   await FileSystem.writeAsStringAsync(viewerPath, html)
   report(onProgress, 82, 'Opening viewer…')
 
   return {
     uri: viewerPath,
-    useInject,
-    vfB64: useInject ? vfB64 : null,
+    html,
+    baseUrl: origin || charDir,
+    useInject: true,
+    vfB64,
     scale,
     modelFile,
   }
@@ -183,9 +207,11 @@ export async function resolveLive2DBundle(character, onProgress) {
   return {
     mode: 'local',
     source: { uri: viewer.uri },
+    html: viewer.html,
+    baseUrl: viewer.baseUrl,
     readAccessDir: LIVE2D_DIR.replace(/\/$/, ''),
     characterId: c.id,
-    useInject: viewer.useInject,
+    useInject: true,
     vfB64: viewer.vfB64,
     scale: viewer.scale,
     modelFile: viewer.modelFile,

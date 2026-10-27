@@ -91,6 +91,7 @@ export function buildViewerPageBody(scale, modelFile, autoBoot = true) {
       if(PIXI.Ticker.shared&&PIXI.Ticker.shared.add){
         PIXI.Ticker.shared.add(function(){ try{ model.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', window.__mouth||0);}catch(e){} });
       }
+      var hint=document.getElementById('hint'); if(hint) hint.style.display='none';
       say('LIVE2D_OK');
     }catch(e){
       say('ERR: '+(e&&e.message?e.message:e));
@@ -99,20 +100,26 @@ export function buildViewerPageBody(scale, modelFile, autoBoot = true) {
   ${autoBoot ? 'boot();' : 'window.startBoot=boot; say("READY");'}`
 }
 
-export function buildViewerHtmlDocument(scale, modelFile, autoBoot = true) {
+export function buildViewerHtmlDocument(scale, modelFile, autoBoot = true, scriptBase = '..') {
   const body = buildViewerPageBody(scale, modelFile, autoBoot)
   const dataScript = autoBoot ? '<script src="vf.data.js"></script>\n' : ''
+  const js = (name) => `${String(scriptBase).replace(/\/$/, '')}/js/${name}`
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}#c{width:100%;height:100%;display:block}</style>
-<script src="../js/live2dcubismcore.min.js"></script>
-<script src="../js/pixi.min.js"></script>
-<script src="../js/cubism4.min.js"></script>
+<style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+#c{width:100%;height:100%;display:block;position:absolute;left:0;top:0}
+#hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 18px -apple-system,sans-serif;color:#1a1a1a;z-index:3;pointer-events:none;text-align:center;padding:24px}
+</style>
+<script src="${js('live2dcubismcore.min.js')}"></script>
+<script src="${js('pixi.min.js')}"></script>
+<script src="${js('cubism4.min.js')}"></script>
 </head>
 <body>
+<div id="hint">Loading waifu…</div>
 <canvas id="c"></canvas>
 ${dataScript}<script>${body}</script>
 </body>

@@ -1,26 +1,24 @@
-import { ResizeMode, Video } from 'expo-av'
-import { useRef } from 'react'
+import { useVideoPlayer, VideoView } from 'expo-video'
 import { Dimensions, StyleSheet, View } from 'react-native'
 
 const { width, height } = Dimensions.get('window')
 
 export default function LiveWallpaper({ uri }) {
-  const video = useRef(null)
+  const player = useVideoPlayer(uri ? { uri } : null, (p) => {
+    p.loop = true
+    p.muted = true
+    if (uri) p.play()
+  })
 
-  if(!uri) return null
+  if (!uri) return null
 
   return (
-    <View style={styles.container} pointerEvents='none'>
-      <Video
-        ref={video}
-        source={{ uri }}
+    <View style={styles.container} pointerEvents="none">
+      <VideoView
+        player={player}
         style={styles.video}
-        resizeMode={ResizeMode.COVER}
-        isLooping
-        isMuted
-        shouldPlay
-        onLoad={() => console.log('wallpaper loaded!')}
-        onError={(e) => console.log('wallpaper error:', e)}
+        contentFit="cover"
+        nativeControls={false}
       />
     </View>
   )

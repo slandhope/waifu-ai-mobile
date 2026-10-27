@@ -1,14 +1,15 @@
 import { Feather } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { NavigationContainer } from '@react-navigation/native'
+import { NavigationContainer, useNavigation } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect'
+import { canUseNativeGlass } from './src/lib/glass'
+import { isExpoGo } from './src/utils/isExpoGo'
 import * as Haptics from 'expo-haptics'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useState } from 'react'
-import { StyleSheet, TouchableOpacity, View } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
+import { Component, useEffect, useState } from 'react'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 import { Live2DProvider } from './src/context/Live2DContext'
@@ -30,6 +31,8 @@ import CoachScreen from './src/screens/CoachScreen'
 import FitnessScreen from './src/screens/FitnessScreen'
 import GymWorkoutScreen from './src/screens/GymWorkoutScreen'
 import HomeScreen from './src/screens/HomeScreen'
+import WaifuStage from './src/components/WaifuStage'
+import WallpaperBackground from './src/components/WallpaperBackground'
 import HabitsScreen from './src/screens/HabitsScreen'
 import HabitDetailScreen from './src/screens/HabitDetailScreen'
 import StudyScreen from './src/screens/StudyScreen'
@@ -52,35 +55,26 @@ const TABS = [
 ]
 
 function TabItem({ route, focused, onPress }) {
-  const scale = useSharedValue(1)
   const tab = TABS.find(t => t.name === route.name)
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
-
   return (
     <TouchableOpacity
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-        scale.value = withSpring(0.85, { damping: 8 }, () => { scale.value = withSpring(1, { damping: 8 }) })
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
         onPress()
       }}
-      onPressIn={() => scale.value = withSpring(1.15, { damping: 6, stiffness: 300 })}
-      onPressOut={() => scale.value = withSpring(1, { damping: 10, stiffness: 200 })}
       style={styles.ftab}
-      activeOpacity={1}
+      activeOpacity={0.85}
     >
       {focused && <View style={styles.activeBlob} />}
-      <Animated.View style={animStyle}>
-        <Feather name={tab?.icon || 'circle'} size={20} color={focused ? '#1a1a1a' : 'rgba(0,0,0,0.45)'} />
-      </Animated.View>
-      <Animated.Text style={[styles.ftabLabel, animStyle, { color: focused ? '#1a1a1a' : 'rgba(0,0,0,0.45)', fontWeight: focused ? '600' : '400' }]}>
+      <Feather name={tab?.icon || 'circle'} size={20} color={focused ? '#1a1a1a' : 'rgba(0,0,0,0.45)'} />
+      <Text style={[styles.ftabLabel, { color: focused ? '#1a1a1a' : 'rgba(0,0,0,0.45)', fontWeight: focused ? '600' : '400' }]}>
         {route.name}
-      </Animated.Text>
+      </Text>
     </TouchableOpacity>
   )
 }
 
 function GlassTabBar({ state, navigation }) {
-  const glassAvailable = isGlassEffectAPIAvailable()
   const content = (
     <View style={styles.tabInner}>
       {state.routes.map((route, index) => (
@@ -88,37 +82,185 @@ function GlassTabBar({ state, navigation }) {
       ))}
     </View>
   )
+  let wrap = (
+    <View style={[styles.tabWrap, { backgroundColor: 'rgba(255,255,255,0.92)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.95)' }]}>
+      {content}
+    </View>
+  )
+  if (canUseNativeGlass()) {
+    try {
+      const { GlassView } = require('expo-glass-effect')
+      wrap = (
+        <GlassView style={styles.tabWrap} glassEffectStyle="regular" colorScheme="light">
+          {content}
+        </GlassView>
+      )
+    } catch (_e) {}
+  }
   return (
-    <View style={styles.tabContainer}>
-      {glassAvailable 
-        ? <GlassView style={styles.tabWrap} glassEffectStyle='regular' colorScheme='light'>{content}</GlassView>
-        : <View style={[styles.tabWrap, { backgroundColor: 'rgba(255,255,255,0.65)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)' }]}>{content}</View>
-      }
+    <View style={styles.tabContainer} pointerEvents="box-none" collapsable={false}>
+      {wrap}
+    </View>
+  )
+}
+
+class TabErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { err: null }
+  }
+  static getDerivedStateFromError(err) { return { err } }
+  componentDidCatch(err) { console.log('[Tab]', this.props.name, err?.message || err) }
+  render() {
+    if (this.state.err) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#1a1a1a', marginBottom: 8 }}>{this.props.name} hit an error</Text>
+          <Text style={{ fontSize: 13, color: 'rgba(0,0,0,0.55)', textAlign: 'center' }}>{String(this.state.err?.message || this.state.err)}</Text>
+        </View>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function ExpoGoPane({ children }) {
+  return (
+    <View
+      pointerEvents="box-none"
+      collapsable={false}
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 80 }}
+    >
+      {children}
+    </View>
+  )
+}
+
+function ExpoGoTabs({ data, profile, wallpaper }) {
+  const navigation = useNavigation()
+  const [tab, setTab] = useState('Home')
+  const routes = TABS.map((t) => ({ name: t.name, key: t.name }))
+  const index = Math.max(0, TABS.findIndex((t) => t.name === tab))
+  const wp = wallpaper?.currentWallpaper ?? wallpaper
+
+  const goTab = (name) => {
+    console.log('[ExpoGoTabs] tab', name)
+    setTab(name)
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#eef4ff' }} collapsable={false}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill} collapsable={false}>
+        <WallpaperBackground wallpaper={wp} style={{ flex: 1 }} />
+      </View>
+      {tab === 'Home' && (
+        <View style={StyleSheet.absoluteFill} collapsable={false} pointerEvents="box-none">
+          <HomeScreen wallpaper={wallpaper} />
+        </View>
+      )}
+      {tab === 'Home' && (
+        <ExpoGoPane>
+          <WaifuStage
+            data={data}
+            profile={profile}
+            onSettingsPress={() => navigation.navigate('Settings')}
+            onHabitsPress={() => navigation.navigate('Habits')}
+          />
+        </ExpoGoPane>
+      )}
+      {tab === 'Coach' && (
+        <ExpoGoPane>
+          <TabErrorBoundary name="Coach">
+            <CoachScreen data={data} wallpaper={wallpaper} />
+          </TabErrorBoundary>
+        </ExpoGoPane>
+      )}
+      {tab === 'Trading' && (
+        <ExpoGoPane>
+          <TabErrorBoundary name="Trading">
+            <TradingScreen wallpaper={wallpaper} profile={profile} />
+          </TabErrorBoundary>
+        </ExpoGoPane>
+      )}
+      {tab === 'Study' && (
+        <ExpoGoPane>
+          <TabErrorBoundary name="Study">
+            <StudyScreen wallpaper={wallpaper} />
+          </TabErrorBoundary>
+        </ExpoGoPane>
+      )}
+      {tab === 'Stats' && (
+        <ExpoGoPane>
+          <TabErrorBoundary name="Stats">
+            <StatsScreen data={data} navigation={navigation} wallpaper={wallpaper} />
+          </TabErrorBoundary>
+        </ExpoGoPane>
+      )}
+      <GlassTabBar
+        state={{ index, routes }}
+        navigation={{ navigate: goTab }}
+      />
     </View>
   )
 }
 
 function TabNavigator({ data, profile, wallpaper }) {
+  if (isExpoGo()) {
+    return (
+      <TabErrorBoundary name="Tabs">
+        <ExpoGoTabs data={data} profile={profile} wallpaper={wallpaper} />
+      </TabErrorBoundary>
+    )
+  }
   return (
     <Tab.Navigator
       tabBar={(props) => <GlassTabBar {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: 'transparent' } }}
+      detachInactiveScreens
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#eef4ff', flex: 1 } }}
     >
-      <Tab.Screen name='Home' options={{ lazy: false }}>
+      <Tab.Screen name="Home" options={{ unmountOnBlur: true }}>
         {({ navigation }) => (
-          <HomeScreen
-            data={data}
-            profile={profile}
-            wallpaper={wallpaper}
-            onSettingsPress={() => navigation.navigate('Settings')}
-            onHabitsPress={() => navigation.getParent()?.navigate('Habits')}
-          />
+          <View style={{ flex: 1 }}>
+            <HomeScreen wallpaper={wallpaper} />
+            <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 80 }}>
+              <WaifuStage
+                data={data}
+                profile={profile}
+                onSettingsPress={() => navigation.navigate('Settings')}
+                onHabitsPress={() => navigation.getParent()?.navigate('Habits')}
+              />
+            </View>
+          </View>
         )}
       </Tab.Screen>
-      <Tab.Screen name='Coach'>{() => <CoachScreen data={data} wallpaper={wallpaper} />}</Tab.Screen>
-      <Tab.Screen name='Trading'>{() => <TradingScreen wallpaper={wallpaper} profile={profile} />}</Tab.Screen>
-      <Tab.Screen name='Study'>{() => <StudyScreen wallpaper={wallpaper} />}</Tab.Screen>
-      <Tab.Screen name='Stats'>{({ navigation }) => <StatsScreen data={data} navigation={navigation} wallpaper={wallpaper} />}</Tab.Screen>
+      <Tab.Screen name="Coach">
+        {() => (
+          <View style={{ flex: 1 }}>
+            <CoachScreen data={data} wallpaper={wallpaper} />
+          </View>
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="Trading">
+        {() => (
+          <View style={{ flex: 1 }}>
+            <TradingScreen wallpaper={wallpaper} profile={profile} />
+          </View>
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="Study">
+        {() => (
+          <View style={{ flex: 1 }}>
+            <StudyScreen wallpaper={wallpaper} />
+          </View>
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="Stats">
+        {({ navigation }) => (
+          <View style={{ flex: 1 }}>
+            <StatsScreen data={data} navigation={navigation} wallpaper={wallpaper} />
+          </View>
+        )}
+      </Tab.Screen>
     </Tab.Navigator>
   )
 }
@@ -135,6 +277,9 @@ function App() {
   // Background health sync + auto habit checks (via FitnessProvider)
   useTradingAlerts(!showLogin)
   useNotifications(data.missed, data.streak, !showLogin)
+  useEffect(() => {
+    console.log('[App] ready', { expoGo: isExpoGo(), onboarding: showOnboarding, login: showLogin })
+  }, [showOnboarding, showLogin])
 
   useEffect(() => {
     AsyncStorage.getItem('onboarding-done').then(val => { if(val === 'yes') setShowOnboarding(false) })
@@ -149,13 +294,16 @@ function App() {
 
   if(showOnboarding) {
     return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeContext.Provider value={theme}>
         <SafeAreaProvider><StatusBar style='light' /><OnboardingScreen onDone={() => setShowOnboarding(false)} /></SafeAreaProvider>
       </ThemeContext.Provider>
+      </GestureHandlerRootView>
     )
   }
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <ThemeContext.Provider value={theme}>
       <Live2DProvider>
         <WaifuStateProvider key={waifuSyncKey}>
@@ -173,7 +321,7 @@ function App() {
               <FitnessProvider toggleHabit={data.toggleHabit} todayHabits={data.todayHabits}>
               <LiveCameraProvider>
               <NavigationContainer>
-                <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+                <Stack.Navigator detachInactiveScreens={false} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#eef4ff', flex: 1 } }}>
                   <Stack.Screen name='Tabs'>{() => <TabNavigator data={data} profile={profile} wallpaper={wallpaper} />}</Stack.Screen>
                   <Stack.Screen name='Habits' options={{ gestureEnabled: true, animation: 'slide_from_right' }}>
                     {(props) => <HabitsScreen {...props} data={data} wallpaper={wallpaper} />}
@@ -210,11 +358,12 @@ function App() {
         </WaifuStateProvider>
       </Live2DProvider>
     </ThemeContext.Provider>
+    </GestureHandlerRootView>
   )
 }
 
 const styles = StyleSheet.create({
-  tabContainer: { position: 'absolute', bottom: 30, left: '5%', right: '5%' },
+  tabContainer: { position: 'absolute', bottom: 30, left: '5%', right: '5%', zIndex: 200, elevation: 20 },
   tabWrap: { width: '100%', borderRadius: 50, overflow: 'hidden' },
   tabInner: { flexDirection: 'row', paddingVertical: 5, paddingHorizontal: 4 },
   ftab: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 40, gap: 2, position: 'relative' },

@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import {
   View, Text, Image, TextInput, TouchableOpacity, Pressable, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal,
+  useWindowDimensions,
 } from 'react-native'
-import { Audio } from 'expo-av'
+import { playUri, requestMic, startMic, stopMic } from '../lib/audio'
 import { Feather } from '@expo/vector-icons'
 import Svg, { Circle, Path } from 'react-native-svg'
-import AsukaLive2D from './AsukaLive2D'
 import GlassSurface from './GlassSurface'
 import HabitsPanel from './HabitsPanel'
 import { calcScore, HABITS } from '../constants'
@@ -18,6 +18,8 @@ import { useLiveCamera } from '../context/LiveCameraContext'
 import { useWaifuState } from '../context/WaifuStateContext'
 import { getLive2dExprsForEquipped } from '../lib/waifuCare'
 import { getReply, synthesize, transcribe, trySwitch, handleTeaching } from '../lib/waifu'
+import ClonePanel from './ClonePanel'
+import { getCachedLikeness, refreshLikeness, replyDelayMs, splitReplicaBubbles } from '../lib/likeness'
 import {
   appendChatExchange, getApiHistoryForReply,
   pullChatFromCloud, toApiHistory,
@@ -70,10 +72,10 @@ function MiniClock() {
 }
 
 export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, data }) {
-  const asuka = useRef(null)
+  const { width: winW, height: winH } = useWindowDimensions()
   const recRef = useRef(null)
   const recordingRef = useRef(false)
-  const { characterId, character, swapCharacter } = useLive2DCharacter()
+  const { characterId, character, swapCharacter, live2dRef } = useLive2DCharacter()
   const { care, relationship, careAction, buyItem, equipItem, getCatalog } = useWaifuState()
   const { openLiveCamera } = useLiveCamera()
   const { steps, sleepHours, activeMinutes, connected } = useFitness()
@@ -95,7 +97,7 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
 
   async function say(text) {
     setReply(text)
-    try { const a = await synthesize(text); asuka.current?.speak(a) } catch (_e) {}
+    try { const a = await synthesize(text); live2dRef?.current?.speak(a) } catch (_e) {}
   }
 
   async function send(text) {
@@ -105,30 +107,47 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
     setBusy(true)
     setReply('…')
     try {
+      const like = getCachedLikeness()
+      const replicaOn = !!(like && like.enabled)
       let answer
       let speak = true
-      const switched = trySwitch(msg)
-      if (switched != null) answer = switched
-      else {
-        const taught = await handleTeaching(history, msg)
-        if (taught != null) { answer = taught; speak = answer.length < 240 }
+      if (!replicaOn) {
+        const switched = trySwitch(msg)
+        if (switched != null) answer = switched
         else {
-          const ctx = await buildWaifuContextAsync({
-            todayHabits,
-            streak: data?.streak || 0,
-            steps,
-            sleepHours,
-            activeMinutes,
-            connected,
-            coins: care?.coins ?? 0,
-          }, msg)
-          answer = await getReply(history, msg, ctx)
+          const taught = await handleTeaching(history, msg)
+          if (taught != null) { answer = taught; speak = answer.length < 240 }
         }
+      }
+      if (answer == null) {
+        const ctx = replicaOn ? '' : await buildWaifuContextAsync({
+          todayHabits,
+          streak: data?.streak || 0,
+          steps,
+          sleepHours,
+          activeMinutes,
+          connected,
+          coins: care?.coins ?? 0,
+        }, msg)
+        answer = await getReply(history, msg, ctx)
       }
       const merged = await appendChatExchange(msg, answer)
       setHistory(toApiHistory(merged, 20))
-      setReply(answer)
-      if (speak) { const audio = await synthesize(answer); asuka.current?.speak(audio) }
+      if (replicaOn) {
+        const wait = replyDelayMs(like)
+        if (wait) await new Promise((r) => setTimeout(r, wait))
+      }
+      const bubbles = splitReplicaBubbles(answer, replicaOn)
+      for (let i = 0; i < bubbles.length; i++) {
+        setReply(bubbles[i])
+        if (speak) {
+          try {
+            const audio = await synthesize(bubbles[i])
+            live2dRef?.current?.speak(audio)
+          } catch (_e) {}
+        }
+        if (i < bubbles.length - 1) await new Promise((r) => setTimeout(r, 700))
+      }
     } catch (e) {
       setReply('(' + (e?.message || 'something went wrong') + ')')
     } finally { setBusy(false) }
@@ -160,7 +179,7 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
 
   function applyEquippedLooks(equipped) {
     const exprs = getLive2dExprsForEquipped(equipped)
-    if (exprs.length) exprs.forEach((e) => asuka.current?.setExpression(e))
+    if (exprs.length) exprs.forEach((e) => live2dRef?.current?.setExpression(e))
   }
 
   function handleEquip(category, id, forChar) {
@@ -176,6 +195,7 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      refreshLikeness().catch(() => {})
       const merged = await pullChatFromCloud({ force: true })
       if (cancelled) return
       const log = merged?.chatLog || (Array.isArray(merged) ? merged : null)
@@ -194,15 +214,12 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
   async function startRecording() {
     if (busy || transcribing || recordingRef.current) return
     try {
-      const perm = await Audio.requestPermissionsAsync()
-      if (!perm.granted) {
+      const granted = await requestMic()
+      if (!granted) {
         setReply('(Microphone permission is needed for voice chat)')
         return
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true })
-      const rec = new Audio.Recording()
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY)
-      await rec.startAsync()
+      const rec = await startMic()
       recRef.current = rec
       recordingRef.current = true
       setRecording(true)
@@ -221,9 +238,7 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
     setTranscribing(true)
     setReply('…')
     try {
-      await rec.stopAndUnloadAsync()
-      const uri = rec.getURI()
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true })
+      const uri = await stopMic(rec)
       if (!uri) throw new Error('no recording')
       const text = await transcribe(uri)
       if (!text) {
@@ -280,6 +295,7 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
 
   const COMPANION_BTNS = [
     { key: 'talk', icon: 'mic', label: 'Talk' },
+    { key: 'clone', icon: 'user-plus', label: 'Clone' },
     { key: 'habits', icon: 'check-circle', label: 'Habits & Gym', badge: habitsLeft > 0 ? habitsLeft : null },
     { key: 'room', icon: 'image', label: 'Room' },
     { key: 'care', icon: 'heart', label: 'Care' },
@@ -288,11 +304,9 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
   ]
 
   return (
-    <View style={styles.root}>
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: tint }]} pointerEvents="none" />
-
+    <View style={[styles.root, { width: winW, height: winH, flex: 1 }]} pointerEvents="box-none" collapsable={false}>
       {/* Layer 1 — header (above character) */}
-      <View style={styles.header} pointerEvents="box-none">
+      <View style={styles.header} pointerEvents="box-none" collapsable={false}>
         <View style={styles.headerSafe}>
           <View style={styles.topBar}>
             <GlassSurface borderRadius={28} style={styles.weatherPill}>
@@ -325,13 +339,8 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
         </View>
       </View>
 
-      {/* Layer 2 — Asuka (hero) */}
-      <View style={styles.characterStage} pointerEvents="box-none">
-        <AsukaLive2D ref={asuka} style={styles.character} />
-      </View>
-
       {/* Layer 3 — companion actions beside her */}
-      <View style={styles.companionStrip} pointerEvents="box-none">
+      <View style={styles.companionStrip} pointerEvents="box-none" collapsable={false}>
         {COMPANION_BTNS.map((b) => (
           <TouchableOpacity key={b.key} onPress={() => {
             if (b.key === 'habits' && onHabitsPress) onHabitsPress()
@@ -402,6 +411,7 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
             <View style={styles.sheetHead}>
               <Text style={styles.sheetTitle}>
                 {panel === 'talk' ? 'Talk'
+                  : panel === 'clone' ? 'Clone'
                   : panel === 'habits' ? 'Habits & Gym'
                   : panel === 'room' ? 'Room & Scenes'
                   : panel === 'care' ? 'Care'
@@ -416,11 +426,15 @@ export default function WaifuStage({ onSettingsPress, onHabitsPress, profile, da
             {panel === 'talk' && (
               <View style={styles.talkPanel}>
                 <Text style={styles.sheetText}>
-                  Hold the button and speak — Asuka will hear you and reply in her voice.
+                  {getCachedLikeness()?.enabled
+                    ? 'Hold and speak — she answers as her, in her voice.'
+                    : 'Hold the button and speak — Asuka will hear you and reply in her voice.'}
                 </Text>
                 {renderPttButton(true)}
               </View>
             )}
+
+            {panel === 'clone' && <ClonePanel />}
 
             {panel === 'habits' && (
               <HabitsPanel
@@ -592,33 +606,43 @@ function Bar({ label, v }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, width: '100%' },
   header: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 12,
-    elevation: 12,
+    zIndex: 40,
+    elevation: 40,
     paddingHorizontal: 22,
+    paddingTop: 4,
   },
   headerSafe: {},
   characterStage: {
     position: 'absolute',
-    left: 4,
-    right: -20,
-    top: 168,
-    bottom: 100,
-    zIndex: 10,
-    elevation: 10,
+    left: 0,
+    right: 0,
+    top: 96,
+    bottom: 108,
+    zIndex: 1,
+    overflow: 'hidden',
+    opacity: 0.99,
   },
   character: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
+  characterFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  characterEmoji: { fontSize: 88, marginBottom: 4 },
+  characterName: { fontSize: 26, fontWeight: '800', color: '#1a1a1a' },
+  characterHint: { marginTop: 6, fontSize: 14, fontWeight: '600', color: 'rgba(0,0,0,0.45)' },
   companionStrip: {
     position: 'absolute',
     left: 16,
     top: '38%',
-    zIndex: 20,
-    elevation: 20,
+    zIndex: 50,
+    elevation: 50,
     gap: 10,
   },
   companionChip: { width: 52 },
@@ -683,12 +707,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 20,
-    bottom: 100,
+    bottom: 96,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    zIndex: 25,
-    elevation: 25,
+    zIndex: 60,
+    elevation: 60,
   },
   inputShell: { flex: 1 },
   input: { paddingHorizontal: 22, paddingVertical: 16, fontSize: 16, color: '#1a1a1a' },

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Swiper from 'react-native-swiper'
 import { COLORS } from '../constants'
 
@@ -30,6 +30,7 @@ const slides = [
 ]
 
 export default function OnboardingScreen({ onDone }) {
+  const insets = useSafeAreaInsets()
   const handleDone = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     await AsyncStorage.setItem('onboarding-done', 'yes')
@@ -37,7 +38,7 @@ export default function OnboardingScreen({ onDone }) {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={[styles.safe, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Swiper
         loop={false}
         dot={<View style={styles.dot} />}
@@ -69,7 +70,7 @@ export default function OnboardingScreen({ onDone }) {
           </LinearGradient>
         </Pressable>
       </View>
-    </SafeAreaView>
+    </View>
   )
 }
 

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { GROQ_API_KEY, ELEVENLABS_API_KEY, VOICE_ID } from '../secrets'
 import { apiCall } from '../utils/api'
+import { getCachedLikeness } from './likeness'
 import { shouldUseGrokResearch } from './grokResearch'
 import { runGrokResearch } from './grokAgent'
 import { buildGrokMemoryContext } from './waifuContext'
@@ -96,7 +97,9 @@ async function brainText(system, user) { return brainRaw(system, user, 0.7, 700)
 
 // ── Normal chat reply (AWS — same path as PC) ──
 export async function getReply(history, userText, contextBlock = '') {
-  if (shouldUseGrokResearch(userText)) {
+  const like = getCachedLikeness()
+  const replicaOn = !!(like && like.enabled)
+  if (!replicaOn && shouldUseGrokResearch(userText)) {
     try {
       const memCtx = await buildGrokMemoryContext(userText)
       return await runGrokResearch(userText, { context: memCtx })
@@ -125,8 +128,8 @@ export async function getReply(history, userText, contextBlock = '') {
       system,
       messages: messages.slice(-20),
       userId,
-      temperature: 0.85,
-      max_tokens: 150,
+      temperature: replicaOn ? 0.92 : 0.85,
+      max_tokens: replicaOn ? 450 : 150,
     }),
   })
   const j = await res.json()
@@ -159,6 +162,16 @@ function voiceSettings() {
     : { stability: 0.4, similarity_boost: 0.8, speed: 1.0 }
 }
 export async function synthesize(text) {
+  const like = getCachedLikeness()
+  if (like && like.enabled && like.voiceId) {
+    const res = await apiCall('/ai/voice', {
+      method: 'POST',
+      body: JSON.stringify({ text, voiceId: like.voiceId, likeness: true, personality }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(j.message || j.error || 'voice failed')
+    if (j.audio) return 'data:audio/mpeg;base64,' + j.audio
+  }
   const url = 'https://api.elevenlabs.io/v1/text-to-speech/' + VOICE_ID + '?output_format=mp3_22050_32'
   const res = await fetch(url, {
     method: 'POST',

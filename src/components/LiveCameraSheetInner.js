@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons'
-import { Audio } from 'expo-av'
+import { playUri, requestMic, startMic, stopMic } from '../lib/audio'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Haptics from 'expo-haptics'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -92,8 +92,7 @@ export default function LiveCameraSheetInner() {
   async function speak(text) {
     try {
       const audio = await synthesize(text)
-      const { sound } = await Audio.Sound.createAsync({ uri: audio })
-      await sound.playAsync()
+      playUri(audio)
     } catch (_e) {}
   }
 
@@ -204,15 +203,12 @@ export default function LiveCameraSheetInner() {
   async function startRecording() {
     if (busy || recordingRef.current) return
     try {
-      const perm = await Audio.requestPermissionsAsync()
-      if (!perm.granted) {
+      const granted = await requestMic()
+      if (!granted) {
         setStatus('Mic permission needed')
         return
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true })
-      const rec = new Audio.Recording()
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY)
-      await rec.startAsync()
+      const rec = await startMic()
       recRef.current = rec
       recordingRef.current = true
       setRecording(true)
@@ -229,9 +225,7 @@ export default function LiveCameraSheetInner() {
     recRef.current = null
     setBusy(true)
     try {
-      await rec.stopAndUnloadAsync()
-      const uri = rec.getURI()
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true })
+      const uri = await stopMic(rec)
       if (!uri) throw new Error('no recording')
       const text = await transcribe(uri)
       if (!text) {

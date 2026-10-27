@@ -6,7 +6,7 @@ import {
 } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { runOnJS } from 'react-native-reanimated'
-import Swipeable from 'react-native-gesture-handler/Swipeable'
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import GlassSurface from './GlassSurface'
 import WallpaperBackground from './WallpaperBackground'
